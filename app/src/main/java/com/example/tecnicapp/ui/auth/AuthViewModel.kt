@@ -1,5 +1,8 @@
 package com.example.tecnicapp.ui.auth
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.tecnicapp.data.AuthRepository
@@ -23,7 +26,6 @@ class AuthViewModel(
     val uiState: StateFlow<AuthUiState> = _uiState
 
     init {
-        // Restaurar sesión si ya hay usuario
         val currentUser = repo.currentUser()
         if (currentUser != null) {
             _uiState.value = _uiState.value.copy(isLoggedIn = true)
@@ -86,19 +88,81 @@ class AuthViewModel(
                     error = null
                 )
             } else {
-                _uiState.value.copy(
+                _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isLoggedIn = false,
                     error = result.exceptionOrNull()?.localizedMessage
                         ?: "Error al registrarse"
                 )
+                _uiState.value
             }
         }
     }
 
+    // ---------- Recuperar contraseña ----------
+
+    data class ForgotPasswordUiState(
+        val isLoading: Boolean = false,
+        val error: String? = null,
+        val success: Boolean = false
+    )
+
+    var forgotState by mutableStateOf(ForgotPasswordUiState())
+        private set
+
+    fun sendReset(email: String) {
+        viewModelScope.launch {
+            forgotState = forgotState.copy(isLoading = true, error = null, success = false)
+            val result = repo.sendPasswordReset(email)
+            forgotState = if (result.isSuccess) {
+                forgotState.copy(isLoading = false, success = true)
+            } else {
+                forgotState.copy(
+                    isLoading = false,
+                    error = result.exceptionOrNull()?.localizedMessage ?: "Error enviando correo"
+                )
+            }
+        }
+    }
+
+    fun clearForgotState() {
+        forgotState = ForgotPasswordUiState()
+    }
+
+    // ---------- Cambio de contraseña ----------
+
+    data class ChangePasswordUiState(
+        val isLoading: Boolean = false,
+        val error: String? = null,
+        val success: Boolean = false
+    )
+
+    var changePassState by mutableStateOf(ChangePasswordUiState())
+        private set
+
+    fun changePassword(current: String, nuevo: String) {
+        viewModelScope.launch {
+            changePassState = ChangePasswordUiState(isLoading = true)
+            val result = repo.changePassword(current, nuevo)
+            changePassState = if (result.isSuccess) {
+                ChangePasswordUiState(success = true)
+            } else {
+                ChangePasswordUiState(
+                    error = result.exceptionOrNull()?.localizedMessage ?: "Error cambiando contraseña"
+                )
+            }
+        }
+    }
+
+    fun clearChangePasswordState() {
+        changePassState = ChangePasswordUiState()
+    }
+
+    // ---------- Logout y limpieza ----------
+
     fun logout() {
         repo.logout()
-        _uiState.value = AuthUiState() // resetea estado
+        _uiState.value = AuthUiState()
     }
 
     fun clearError() {

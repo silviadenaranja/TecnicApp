@@ -37,6 +37,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.tecnicapp.model.Grado
+import com.example.tecnicapp.ui.auth.AuthViewModel
+import androidx.compose.material.icons.filled.ExitToApp
 
 enum class GradosSortOrder {
     ASC,
@@ -47,8 +49,10 @@ enum class GradosSortOrder {
 @Composable
 fun GradosScreen(
     vm: GradosViewModel = viewModel(),
+    authVm: AuthViewModel = viewModel(),           // <<< añadido
     onGradoClicked: (Grado) -> Unit,
-    onVerTodasTecnicas: () -> Unit
+    onVerTodasTecnicas: () -> Unit,
+    onLoggedOut: () -> Unit                        // <<< añadido
 ) {
     val state by vm.uiState.collectAsState()
 
@@ -108,13 +112,23 @@ fun GradosScreen(
                             contentDescription = "Ver todas las técnicas"
                         )
                     }
-
+                 //pdf
                  //   IconButton(onClick = { vm.importarTecnicas() }) {
                  //       Icon(
                  //           imageVector = Icons.Default.Download,
                  //           contentDescription = "Importar técnicas"
                  //       )
                  //   }
+                    // Botón cerrar sesión
+                    IconButton(onClick = {
+                        authVm.logout()
+                        onLoggedOut()
+                    }) {
+                        Icon(
+                            imageVector = Icons.Default.ExitToApp,
+                            contentDescription = "Cerrar sesión"
+                        )
+                    }
                 }
             )
         }

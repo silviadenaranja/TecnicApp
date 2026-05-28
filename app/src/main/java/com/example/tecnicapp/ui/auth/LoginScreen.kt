@@ -16,8 +16,12 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -25,14 +29,15 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.compose.runtime.LaunchedEffect
 
 @Composable
 fun LoginScreen(
     onLoggedIn: () -> Unit,
-    vm: AuthViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    vm: AuthViewModel = viewModel()
 ) {
     val state by vm.uiState.collectAsState()
+    val forgotState = vm.forgotState
+    var showForgotDialog by remember { mutableStateOf(false) }
 
     if (state.isLoggedIn) {
         LaunchedEffect(Unit) {
@@ -95,7 +100,71 @@ fun LoginScreen(
                         Text("Registrarse")
                     }
                 }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                TextButton(onClick = {
+                    vm.clearForgotState()
+                    showForgotDialog = true
+                }) {
+                    Text("¿Olvidaste la contraseña?")
+                }
             }
         }
+
+        if (showForgotDialog) {
+            ForgotPasswordDialog(
+                onDismiss = { showForgotDialog = false },
+                onSendReset = { email -> vm.sendReset(email) },
+                isLoading = forgotState.isLoading,
+                error = forgotState.error,
+                success = forgotState.success
+            )
+        }
     }
+}
+
+@Composable
+fun ForgotPasswordDialog(
+    onDismiss: () -> Unit,
+    onSendReset: (String) -> Unit,
+    isLoading: Boolean,
+    error: String?,
+    success: Boolean
+) {
+    var email by remember { mutableStateOf("") }
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Recuperar contraseña") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    label = { Text("Correo electrónico") },
+                    singleLine = true
+                )
+                if (error != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(error, color = Color.Red)
+                }
+                if (success) {
+                    Spacer(Modifier.height(8.dp))
+                    Text("Correo de recuperación enviado.")
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !isLoading && email.isNotBlank(),
+                onClick = { onSendReset(email) }
+            ) {
+                Text("Enviar enlace")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancelar") }
+        }
+    )
 }

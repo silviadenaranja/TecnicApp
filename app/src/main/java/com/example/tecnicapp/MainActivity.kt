@@ -13,6 +13,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.tecnicapp.model.Grado
 import com.example.tecnicapp.pdf.generateTecnicasPdf
 import com.example.tecnicapp.ui.admin.AdminViewModel
+import com.example.tecnicapp.ui.auth.AuthViewModel
+import com.example.tecnicapp.ui.auth.LoginScreen
 import com.example.tecnicapp.ui.grados.GradosScreen
 import com.example.tecnicapp.ui.tecnicas.TecnicasScreen
 import com.example.tecnicapp.ui.tecnicas.TecnicasViewModel
@@ -53,58 +55,79 @@ class MainActivity : ComponentActivity() {
 private fun App() {
     val context = LocalContext.current
 
-    // Estado de navegación
+    // ViewModel de autenticación (compartido por Login y resto de pantallas)
+    val authVm: AuthViewModel = viewModel()
+    val authState by authVm.uiState.collectAsState()
+
+    // Estado de navegación interna (solo cuando está logueado)
     var selectedGrado by remember { mutableStateOf<Grado?>(null) }
     var showTodasTecnicas by remember { mutableStateOf(false) }
+
+    // ViewModel de admin (si lo usas para otras cosas)
+    val adminVm: AdminViewModel = viewModel()
 
     // Back físico / gesto atrás
     BackHandler(enabled = true) {
         when {
+            !authState.isLoggedIn -> {
+                // En la pantalla de login: sale de la app
+                (context as? ComponentActivity)?.finish()
+            }
             showTodasTecnicas -> showTodasTecnicas = false
             selectedGrado != null -> selectedGrado = null
             else -> (context as? ComponentActivity)?.finish()
         }
     }
-    // ViewModel de admin para importar
-    val adminVm: AdminViewModel = viewModel()
 
-    BackHandler(enabled = true) {
+    if (!authState.isLoggedIn) {
+        // Pantalla de LOGIN
+        LoginScreen(
+            onLoggedIn = {
+                // Cuando AuthViewModel marca isLoggedIn = true,
+                // este if se reevalúa y se entra en el flujo de grados.
+                // No hace falta hacer nada especial aquí.
+            },
+            vm = authVm
+        )
+    } else {
+        // Flujo principal de la app (grados / técnicas)
         when {
-            showTodasTecnicas -> showTodasTecnicas = false
-            selectedGrado != null -> selectedGrado = null
-            else -> (context as? ComponentActivity)?.finish()
-        }
-    }
-
-    when {
-        showTodasTecnicas -> {
-            TodasTecnicasScreen(
-                onBack = { showTodasTecnicas = false },
-                onExportPdf = { bloquesOrdenados ->
-                    generateTecnicasPdf(context, bloquesOrdenados)
-                }
-            )
-        }
-
-        selectedGrado == null -> {
-            GradosScreen(
-                onGradoClicked = { grado -> selectedGrado = grado },
-                onVerTodasTecnicas = { showTodasTecnicas = true }
-            )
-        }
-
-        else -> {
-            val grado = selectedGrado!!
-            // Ajusta el constructor del ViewModel si el tuyo es distinto
-            val tecnicasViewModel = remember(grado.id) {
-                TecnicasViewModel(gradoId = grado.id)
+            showTodasTecnicas -> {
+                TodasTecnicasScreen(
+                    onBack = { showTodasTecnicas = false },
+                    onExportPdf = { bloquesOrdenados ->
+                        generateTecnicasPdf(context, bloquesOrdenados)
+                    }
+                )
             }
 
-            TecnicasScreen(
-                grado = grado,
-                vm = tecnicasViewModel,
-                onBack = { selectedGrado = null }
-            )
+            selectedGrado == null -> {
+                GradosScreen(
+                    onGradoClicked = { grado -> selectedGrado = grado },
+                    onVerTodasTecnicas = { showTodasTecnicas = true },
+                    // Cuando cerramos sesión:
+                    onLoggedOut = {
+                        authVm.logout()
+                        // logout() ya pone isLoggedIn = false,
+                        // así que al recomponer volverás a LoginScreen.
+                        selectedGrado = null
+                        showTodasTecnicas = false
+                    }
+                )
+            }
+
+            else -> {
+                val grado = selectedGrado!!
+                val tecnicasViewModel = remember(grado.id) {
+                    TecnicasViewModel(gradoId = grado.id)
+                }
+
+                TecnicasScreen(
+                    grado = grado,
+                    vm = tecnicasViewModel,
+                    onBack = { selectedGrado = null }
+                )
+            }
         }
     }
 }
