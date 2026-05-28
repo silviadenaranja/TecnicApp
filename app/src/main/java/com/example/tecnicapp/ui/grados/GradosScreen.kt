@@ -9,7 +9,9 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -38,7 +40,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.tecnicapp.model.Grado
 import com.example.tecnicapp.ui.auth.AuthViewModel
-import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+
 
 enum class GradosSortOrder {
     ASC,
@@ -49,12 +53,13 @@ enum class GradosSortOrder {
 @Composable
 fun GradosScreen(
     vm: GradosViewModel = viewModel(),
-    authVm: AuthViewModel = viewModel(),           // <<< añadido
+    authVm: AuthViewModel = viewModel(),
     onGradoClicked: (Grado) -> Unit,
     onVerTodasTecnicas: () -> Unit,
-    onLoggedOut: () -> Unit                        // <<< añadido
+    onLoggedOut: () -> Unit
 ) {
     val state by vm.uiState.collectAsState()
+    val changePassState = authVm.changePassState  // <<< AQUÍ leemos el estado de cambio de contraseña
 
     var showDialog by remember { mutableStateOf(false) }
     var editingGrado by remember { mutableStateOf<Grado?>(null) }
@@ -62,6 +67,7 @@ fun GradosScreen(
     var sortOrder by remember { mutableStateOf(GradosSortOrder.ASC) }
     var showDeleteGradoDialog by remember { mutableStateOf(false) }
     var gradoToDelete by remember { mutableStateOf<Grado?>(null) }
+    var showChangePassDialog by remember { mutableStateOf(false) }
 
     val gradosOrdenados = remember(state.grados, sortOrder) {
         when (sortOrder) {
@@ -107,10 +113,7 @@ fun GradosScreen(
                     )
 
                     IconButton(onClick = onVerTodasTecnicas) {
-                        Icon(
-                            Icons.Default.List,
-                            contentDescription = "Ver todas las técnicas"
-                        )
+                        Icon(Icons.Default.List, contentDescription = "Ver todas las técnicas")
                     }
                  //pdf
                  //   IconButton(onClick = { vm.importarTecnicas() }) {
@@ -119,11 +122,20 @@ fun GradosScreen(
                  //           contentDescription = "Importar técnicas"
                  //       )
                  //   }
-                    // Botón cerrar sesión
+
+                    // Perfil: cambiar contraseña
                     IconButton(onClick = {
-                        authVm.logout()
-                        onLoggedOut()
+                        authVm.clearChangePasswordState()
+                        showChangePassDialog = true
                     }) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = "Perfil"
+                        )
+                    }
+
+                    // Cerrar sesión
+                    IconButton(onClick = { onLoggedOut() }) {
                         Icon(
                             imageVector = Icons.Default.ExitToApp,
                             contentDescription = "Cerrar sesión"
@@ -284,8 +296,133 @@ fun GradosScreen(
                     }
                 )
             }
+
+            // Diálogo de cambiar contraseña
+            if (showChangePassDialog) {
+                ChangePasswordDialog(
+                    state = changePassState,
+                    onDismiss = {
+                        showChangePassDialog = false
+                        authVm.clearChangePasswordState()
+                    },
+                    onChangePassword = { current, new ->
+                        authVm.changePassword(current, new)
+                    }
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun ChangePasswordDialog(
+    state: AuthViewModel.ChangePasswordUiState,
+    onDismiss: () -> Unit,
+    onChangePassword: (current: String, new: String) -> Unit
+) {
+    var current by remember { mutableStateOf("") }
+    var newPass by remember { mutableStateOf("") }
+    var newPass2 by remember { mutableStateOf("") }
+
+    var showCurrent by remember { mutableStateOf(false) }
+    var showNew by remember { mutableStateOf(false) }
+    var showNew2 by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Cambiar contraseña") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = current,
+                    onValueChange = { current = it },
+                    label = { Text("Contraseña actual") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    visualTransformation = if (showCurrent) {
+                        androidx.compose.ui.text.input.VisualTransformation.None
+                    } else {
+                        androidx.compose.ui.text.input.PasswordVisualTransformation()
+                    },
+                    trailingIcon = {
+                        val icon = if (showCurrent) Icons.Default.VisibilityOff else Icons.Default.Visibility
+                        val desc = if (showCurrent) "Ocultar" else "Mostrar"
+                        IconButton(onClick = { showCurrent = !showCurrent }) {
+                            Icon(icon, contentDescription = desc)
+                        }
+                    }
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = newPass,
+                    onValueChange = { newPass = it },
+                    label = { Text("Nueva contraseña") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    visualTransformation = if (showNew) {
+                        androidx.compose.ui.text.input.VisualTransformation.None
+                    } else {
+                        androidx.compose.ui.text.input.PasswordVisualTransformation()
+                    },
+                    trailingIcon = {
+                        val icon = if (showNew) Icons.Default.VisibilityOff else Icons.Default.Visibility
+                        val desc = if (showNew) "Ocultar" else "Mostrar"
+                        IconButton(onClick = { showNew = !showNew }) {
+                            Icon(icon, contentDescription = desc)
+                        }
+                    }
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = newPass2,
+                    onValueChange = { newPass2 = it },
+                    label = { Text("Repite nueva contraseña") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    visualTransformation = if (showNew2) {
+                        androidx.compose.ui.text.input.VisualTransformation.None
+                    } else {
+                        androidx.compose.ui.text.input.PasswordVisualTransformation()
+                    },
+                    trailingIcon = {
+                        val icon = if (showNew2) Icons.Default.VisibilityOff else Icons.Default.Visibility
+                        val desc = if (showNew2) "Ocultar" else "Mostrar"
+                        IconButton(onClick = { showNew2 = !showNew2 }) {
+                            Icon(icon, contentDescription = desc)
+                        }
+                    }
+                )
+
+                state.error?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Text(it, color = androidx.compose.ui.graphics.Color.Red)
+                }
+                if (state.success) {
+                    Spacer(Modifier.height(8.dp))
+                    Text("Contraseña actualizada correctamente")
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !state.isLoading &&
+                        newPass.isNotBlank() &&
+                        newPass == newPass2,
+                onClick = { onChangePassword(current, newPass) }
+            ) {
+                Text("Guardar")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cerrar")
+            }
+        }
+    )
 }
 
 @Composable
