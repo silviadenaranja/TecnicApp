@@ -111,6 +111,8 @@ class GradosViewModel(
         _uiState.value = _uiState.value.copy(error = null)
     }
 
+    fun currentUserUid(): String = repo.currentUserUid()
+
     // Si quieres reactivar importar desde PDF:
     /*
     fun importarTecnicas() {

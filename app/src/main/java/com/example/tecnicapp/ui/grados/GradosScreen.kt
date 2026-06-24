@@ -44,8 +44,15 @@ import com.example.tecnicapp.ui.auth.AuthViewModel
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 
 enum class GradosSortOrder {
     ASC,
@@ -63,6 +70,9 @@ fun GradosScreen(
 ) {
     val state by vm.uiState.collectAsState()
     val changePassState = authVm.changePassState
+    val clipboardManager = LocalClipboardManager.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     var showDialog by remember { mutableStateOf(false) }
     var editingGrado by remember { mutableStateOf<Grado?>(null) }
@@ -133,6 +143,26 @@ fun GradosScreen(
                             expanded = menuExpanded,
                             onDismissRequest = { menuExpanded = false }
                         ) {
+                            // Copiar mi ID
+                            DropdownMenuItem(
+                                text = { Text("Copiar mi ID") },
+                                onClick = {
+                                    menuExpanded = false
+                                    val uid = vm.currentUserUid()
+                                    if (uid.isNotBlank()) {
+                                        clipboardManager.setText(AnnotatedString(uid))
+                                        // Mostrar snackbar
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("ID copiado al portapapeles")
+                                        }
+                                    } else {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("No hay usuario autenticado")
+                                        }
+                                    }
+                                }
+                            )
+
                             // Cambiar contraseña
                             DropdownMenuItem(
                                 text = { Text("Cambiar contraseña") },
@@ -143,7 +173,7 @@ fun GradosScreen(
                                 }
                             )
 
-                            // Descargar / Importar técnicas
+                            // Importar técnicas
                             DropdownMenuItem(
                                 text = { Text("Importar técnicas") },
                                 onClick = {
@@ -188,7 +218,8 @@ fun GradosScreen(
                     }
                 }
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { padding ->
         Box(
             modifier = Modifier
