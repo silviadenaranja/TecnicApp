@@ -6,13 +6,17 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -28,21 +32,20 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.tecnicapp.data.Friend
 import com.example.tecnicapp.model.Grado
 import com.example.tecnicapp.ui.auth.AuthViewModel
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
-
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 
 enum class GradosSortOrder {
     ASC,
@@ -59,7 +62,7 @@ fun GradosScreen(
     onLoggedOut: () -> Unit
 ) {
     val state by vm.uiState.collectAsState()
-    val changePassState = authVm.changePassState  // <<< AQUÍ leemos el estado de cambio de contraseña
+    val changePassState = authVm.changePassState
 
     var showDialog by remember { mutableStateOf(false) }
     var editingGrado by remember { mutableStateOf<Grado?>(null) }
@@ -67,6 +70,17 @@ fun GradosScreen(
     var sortOrder by remember { mutableStateOf(GradosSortOrder.ASC) }
     var showDeleteGradoDialog by remember { mutableStateOf(false) }
     var gradoToDelete by remember { mutableStateOf<Grado?>(null) }
+
+    // Amigos
+    var showFriendsDialog by remember { mutableStateOf(false) }
+    var showAddFriendDialog by remember { mutableStateOf(false) }
+    var showListFriendsDialog by remember { mutableStateOf(false) }
+    var selectedFriend by remember { mutableStateOf<Friend?>(null) }
+    var showConfirmSendDialog by remember { mutableStateOf(false) }
+    // Menú hamburguesa
+    var menuExpanded by remember { mutableStateOf(false) }
+
+    // Cambio de contraseña
     var showChangePassDialog by remember { mutableStateOf(false) }
 
     val gradosOrdenados = remember(state.grados, sortOrder) {
@@ -106,39 +120,70 @@ fun GradosScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Mis grados") },
+                navigationIcon = {
+                    Box {
+                        IconButton(onClick = { menuExpanded = true }) {
+                            Icon(
+                                imageVector = Icons.Default.Menu,
+                                contentDescription = "Menú"
+                            )
+                        }
+
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false }
+                        ) {
+                            // Cambiar contraseña
+                            DropdownMenuItem(
+                                text = { Text("Cambiar contraseña") },
+                                onClick = {
+                                    menuExpanded = false
+                                    authVm.clearChangePasswordState()
+                                    showChangePassDialog = true
+                                }
+                            )
+
+                            // Descargar / Importar técnicas
+                            DropdownMenuItem(
+                                text = { Text("Importar técnicas") },
+                                onClick = {
+                                    menuExpanded = false
+                                    // vm.importarTecnicas()
+                                }
+                            )
+
+                            // Amigos
+                            DropdownMenuItem(
+                                text = { Text("Amigos") },
+                                onClick = {
+                                    menuExpanded = false
+                                    showFriendsDialog = true
+                                }
+                            )
+
+                            // Cerrar sesión
+                            DropdownMenuItem(
+                                text = { Text("Cerrar sesión") },
+                                onClick = {
+                                    menuExpanded = false
+                                    onLoggedOut()
+                                }
+                            )
+                        }
+                    }
+                },
                 actions = {
+                    // Ordenar
                     SortMenu(
                         sortOrder = sortOrder,
                         onSortChange = { sortOrder = it }
                     )
 
+                    // Ver todas las técnicas
                     IconButton(onClick = onVerTodasTecnicas) {
-                        Icon(Icons.Default.List, contentDescription = "Ver todas las técnicas")
-                    }
-                 //pdf
-                 //   IconButton(onClick = { vm.importarTecnicas() }) {
-                 //       Icon(
-                 //           imageVector = Icons.Default.Download,
-                 //           contentDescription = "Importar técnicas"
-                 //       )
-                 //   }
-
-                    // Perfil: cambiar contraseña
-                    IconButton(onClick = {
-                        authVm.clearChangePasswordState()
-                        showChangePassDialog = true
-                    }) {
                         Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = "Perfil"
-                        )
-                    }
-
-                    // Cerrar sesión
-                    IconButton(onClick = { onLoggedOut() }) {
-                        Icon(
-                            imageVector = Icons.Default.ExitToApp,
-                            contentDescription = "Cerrar sesión"
+                            Icons.Default.List,
+                            contentDescription = "Ver todas las técnicas"
                         )
                     }
                 }
@@ -227,11 +272,12 @@ fun GradosScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = it,
-                        color = androidx.compose.ui.graphics.Color.Red
+                        color = Color.Red
                     )
                 }
             }
 
+            // Diálogo crear/editar grado
             if (showDialog) {
                 AlertDialog(
                     onDismissRequest = {
@@ -267,6 +313,7 @@ fun GradosScreen(
                 )
             }
 
+            // Diálogo eliminar grado
             if (showDeleteGradoDialog && gradoToDelete != null) {
                 AlertDialog(
                     onDismissRequest = {
@@ -310,6 +357,21 @@ fun GradosScreen(
                     }
                 )
             }
+
+            // Diálogos de amigos
+            FriendsDialogs(
+                vm = vm,
+                showFriendsDialog = showFriendsDialog,
+                onShowFriendsDialogChange = { showFriendsDialog = it },
+                showAddFriendDialog = showAddFriendDialog,
+                onShowAddFriendDialogChange = { showAddFriendDialog = it },
+                showListFriendsDialog = showListFriendsDialog,
+                onShowListFriendsDialogChange = { showListFriendsDialog = it },
+                selectedFriend = selectedFriend,
+                onSelectedFriendChange = { selectedFriend = it },
+                showConfirmSendDialog = showConfirmSendDialog,
+                onShowConfirmSendDialogChange = { showConfirmSendDialog = it }
+            )
         }
     }
 }
@@ -340,9 +402,9 @@ private fun ChangePasswordDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     visualTransformation = if (showCurrent) {
-                        androidx.compose.ui.text.input.VisualTransformation.None
+                        VisualTransformation.None
                     } else {
-                        androidx.compose.ui.text.input.PasswordVisualTransformation()
+                        PasswordVisualTransformation()
                     },
                     trailingIcon = {
                         val icon = if (showCurrent) Icons.Default.VisibilityOff else Icons.Default.Visibility
@@ -362,9 +424,9 @@ private fun ChangePasswordDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     visualTransformation = if (showNew) {
-                        androidx.compose.ui.text.input.VisualTransformation.None
+                        VisualTransformation.None
                     } else {
-                        androidx.compose.ui.text.input.PasswordVisualTransformation()
+                        PasswordVisualTransformation()
                     },
                     trailingIcon = {
                         val icon = if (showNew) Icons.Default.VisibilityOff else Icons.Default.Visibility
@@ -384,9 +446,9 @@ private fun ChangePasswordDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     visualTransformation = if (showNew2) {
-                        androidx.compose.ui.text.input.VisualTransformation.None
+                        VisualTransformation.None
                     } else {
-                        androidx.compose.ui.text.input.PasswordVisualTransformation()
+                        PasswordVisualTransformation()
                     },
                     trailingIcon = {
                         val icon = if (showNew2) Icons.Default.VisibilityOff else Icons.Default.Visibility
@@ -399,7 +461,7 @@ private fun ChangePasswordDialog(
 
                 state.error?.let {
                     Spacer(Modifier.height(8.dp))
-                    Text(it, color = androidx.compose.ui.graphics.Color.Red)
+                    Text(it, color = Color.Red)
                 }
                 if (state.success) {
                     Spacer(Modifier.height(8.dp))
@@ -419,10 +481,177 @@ private fun ChangePasswordDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cerrar")
+                Text("Cancelar")
             }
         }
     )
+}
+
+@Composable
+private fun FriendsDialogs(
+    vm: GradosViewModel,
+    showFriendsDialog: Boolean,
+    onShowFriendsDialogChange: (Boolean) -> Unit,
+    showAddFriendDialog: Boolean,
+    onShowAddFriendDialogChange: (Boolean) -> Unit,
+    showListFriendsDialog: Boolean,
+    onShowListFriendsDialogChange: (Boolean) -> Unit,
+    selectedFriend: Friend?,
+    onSelectedFriendChange: (Friend?) -> Unit,
+    showConfirmSendDialog: Boolean,
+    onShowConfirmSendDialogChange: (Boolean) -> Unit
+) {
+    val friendsState = vm.friendsState
+
+    // Diálogo principal amigos
+    if (showFriendsDialog) {
+        AlertDialog(
+            onDismissRequest = { onShowFriendsDialogChange(false) },
+            title = { Text("Amigos") },
+            text = {
+                Column {
+                    Button(onClick = {
+                        onShowFriendsDialogChange(false)
+                        onShowAddFriendDialogChange(true)
+                    }) {
+                        Text("Añadir amigo")
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = {
+                        onShowFriendsDialogChange(false)
+                        vm.loadFriends()
+                        onShowListFriendsDialogChange(true)
+                    }) {
+                        Text("Ver amigos")
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { onShowFriendsDialogChange(false) }) {
+                    Text("Cerrar")
+                }
+            }
+        )
+    }
+
+    // Añadir amigo
+    if (showAddFriendDialog) {
+        var uidText by remember { mutableStateOf("") }
+        var nombreText by remember { mutableStateOf("") }
+
+        AlertDialog(
+            onDismissRequest = { onShowAddFriendDialogChange(false) },
+            title = { Text("Añadir amigo") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = uidText,
+                        onValueChange = { uidText = it },
+                        label = { Text("UID de Firestore") }
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = nombreText,
+                        onValueChange = { nombreText = it },
+                        label = { Text("Nombre") }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        vm.addFriend(uidText.trim(), nombreText.trim())
+                        onShowAddFriendDialogChange(false)
+                    }
+                ) { Text("Guardar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { onShowAddFriendDialogChange(false) }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    // Ver amigos
+    if (showListFriendsDialog) {
+        AlertDialog(
+            onDismissRequest = { onShowListFriendsDialogChange(false) },
+            title = { Text("Tus amigos") },
+            text = {
+                Column {
+                    if (friendsState.isLoading) {
+                        CircularProgressIndicator()
+                    } else if (friendsState.friends.isEmpty()) {
+                        Text("Todavía no tienes amigos añadidos")
+                    } else {
+                        friendsState.friends.forEach { friend ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        onSelectedFriendChange(friend)
+                                    }
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = friend.nombre,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                if (selectedFriend?.id == friend.id) {
+                                    IconButton(onClick = {
+                                        onShowConfirmSendDialogChange(true)
+                                    }) {
+                                        Icon(
+                                            imageVector = Icons.Default.ArrowForward,
+                                            contentDescription = "Pasar datos"
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    friendsState.error?.let {
+                        Spacer(Modifier.height(8.dp))
+                        Text(it, color = Color.Red)
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { onShowListFriendsDialogChange(false) }) {
+                    Text("Cerrar")
+                }
+            }
+        )
+    }
+
+    // Confirmar pasar datos
+    if (showConfirmSendDialog && selectedFriend != null) {
+        AlertDialog(
+            onDismissRequest = { onShowConfirmSendDialogChange(false) },
+            title = { Text("Pasar datos") },
+            text = {
+                Text("¿Seguro que quieres pasar tus grados y técnicas a ${selectedFriend.nombre}?")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    vm.sendMyDataToFriend(selectedFriend.uidAmigo)
+                    onShowConfirmSendDialogChange(false)
+                    onShowListFriendsDialogChange(false)
+                }) {
+                    Text("Aceptar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { onShowConfirmSendDialogChange(false) }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
 }
 
 @Composable

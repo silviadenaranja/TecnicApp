@@ -1,14 +1,18 @@
 package com.example.tecnicapp.ui.grados
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.tecnicapp.data.FirestoreRepository
+import com.example.tecnicapp.data.Friend
+import com.example.tecnicapp.data.FriendsRepository
 import com.example.tecnicapp.model.Grado
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import com.example.tecnicapp.data.importarTecnicasDesdePdf   // <-- IMPORTANTE
-
+// import com.example.tecnicapp.data.importarTecnicasDesdePdf   // si lo usas
 
 data class GradosUiState(
     val grados: List<Grado> = emptyList(),
@@ -16,16 +20,28 @@ data class GradosUiState(
     val error: String? = null
 )
 
+data class FriendsUiState(
+    val isLoading: Boolean = false,
+    val error: String? = null,
+    val friends: List<Friend> = emptyList()
+)
+
 class GradosViewModel(
-    private val repo: FirestoreRepository = FirestoreRepository()
+    private val repo: FirestoreRepository = FirestoreRepository(),
+    private val friendsRepo: FriendsRepository = FriendsRepository()
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(GradosUiState())
     val uiState: StateFlow<GradosUiState> = _uiState
 
+    var friendsState by mutableStateOf(FriendsUiState())
+        private set
+
     init {
         loadGrados()
     }
+
+    // ---------- GRADOS ----------
 
     fun loadGrados() {
         viewModelScope.launch {
@@ -95,21 +111,82 @@ class GradosViewModel(
         _uiState.value = _uiState.value.copy(error = null)
     }
 
-    // NUEVO: lanzar importador desde el ViewModel
-  // fun importarTecnicas() {
-  //     viewModelScope.launch {
-  //         try {
-  //             android.util.Log.d("IMPORT", "Lanzando importarTecnicasDesdePdf() desde ViewModel")
-  //             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-  //             importarTecnicasDesdePdf()
-  //             // opcional: recargar grados o técnicas globales si te hace falta
-  //             _uiState.value = _uiState.value.copy(isLoading = false)
-  //         } catch (e: Exception) {
-  //             _uiState.value = _uiState.value.copy(
-  //                 isLoading = false,
-  //                 error = e.message ?: "Error importando técnicas"
-  //             )
-  //         }
-  //     }
-  // }
+    // Si quieres reactivar importar desde PDF:
+    /*
+    fun importarTecnicas() {
+        viewModelScope.launch {
+            try {
+                _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+                importarTecnicasDesdePdf()
+                _uiState.value = _uiState.value.copy(isLoading = false)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = e.message ?: "Error importando técnicas"
+                )
+            }
+        }
+    }
+    */
+
+    // ---------- AMIGOS ----------
+
+    fun loadFriends() {
+        viewModelScope.launch {
+            friendsState = friendsState.copy(isLoading = true, error = null)
+            val result = friendsRepo.getFriends()
+            friendsState = if (result.isSuccess) {
+                friendsState.copy(
+                    isLoading = false,
+                    friends = result.getOrNull().orEmpty()
+                )
+            } else {
+                friendsState.copy(
+                    isLoading = false,
+                    error = result.exceptionOrNull()?.localizedMessage
+                )
+            }
+        }
+    }
+
+    fun addFriend(uidAmigo: String, nombre: String) {
+        viewModelScope.launch {
+            val trimmedUid = uidAmigo.trim()
+            val trimmedName = nombre.trim()
+            if (trimmedUid.isEmpty() || trimmedName.isEmpty()) return@launch
+
+            val result = friendsRepo.addFriend(trimmedUid, trimmedName)
+            if (result.isSuccess) {
+                loadFriends()
+            } else {
+                friendsState = friendsState.copy(
+                    error = result.exceptionOrNull()?.localizedMessage
+                )
+            }
+        }
+    }
+
+    fun sendMyDataToFriend(friendUid: String) {
+        viewModelScope.launch {
+            friendsState = friendsState.copy(isLoading = true, error = null)
+            val currentUid = repo.currentUserUid()
+            if (currentUid.isBlank()) {
+                friendsState = friendsState.copy(
+                    isLoading = false,
+                    error = "No hay usuario autenticado"
+                )
+                return@launch
+            }
+
+            val result = repo.copyGradosAndTecnicasToUser(currentUid, friendUid)
+            friendsState = if (result.isSuccess) {
+                friendsState.copy(isLoading = false)
+            } else {
+                friendsState.copy(
+                    isLoading = false,
+                    error = result.exceptionOrNull()?.localizedMessage
+                )
+            }
+        }
+    }
 }

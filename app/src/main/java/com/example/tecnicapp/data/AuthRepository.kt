@@ -3,10 +3,18 @@ package com.example.tecnicapp.data
 import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 
+data class AppUser(
+    val uid: String = "",
+    val email: String = "",
+    val createdAt: Long = System.currentTimeMillis()
+)
+
 class AuthRepository(
-    private val auth: FirebaseAuth = FirebaseAuth.getInstance()
+    private val auth: FirebaseAuth = FirebaseAuth.getInstance(),
+    private val db: FirebaseFirestore = FirebaseFirestore.getInstance()
 ) {
     fun currentUser(): FirebaseUser? = auth.currentUser
 
@@ -15,6 +23,17 @@ class AuthRepository(
             val result = auth.createUserWithEmailAndPassword(email, password).await()
             val user = result.user
             if (user != null) {
+                // Crear documento en Firestore para este uid
+                val appUser = AppUser(
+                    uid = user.uid,
+                    email = user.email ?: email
+                )
+
+                db.collection("users")
+                    .document(user.uid)   // id = uid de auth (buena práctica) [web:613]
+                    .set(appUser)
+                    .await()
+
                 Result.success(user)
             } else {
                 Result.failure(IllegalStateException("Usuario nulo tras registro"))
@@ -38,17 +57,14 @@ class AuthRepository(
         }
     }
 
-    // Cerrar sesión
     fun logout() {
         auth.signOut()
     }
 
-    // Alias opcional; puedes borrar uno de los dos si no quieres duplicar
     fun signOut() {
         auth.signOut()
     }
 
-    // Enviar correo de recuperación
     suspend fun sendPasswordReset(email: String): Result<Unit> {
         return try {
             auth.sendPasswordResetEmail(email.trim()).await()
@@ -58,7 +74,6 @@ class AuthRepository(
         }
     }
 
-    // Cambiar contraseña con reautenticación
     suspend fun changePassword(currentPassword: String, newPassword: String): Result<Unit> {
         val user = auth.currentUser
             ?: return Result.failure(IllegalStateException("No hay usuario logueado"))
