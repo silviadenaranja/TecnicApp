@@ -39,6 +39,12 @@ android {
     buildFeatures {
         compose = true
     }
+
+    sourceSets {
+        getByName("androidTest") {
+            resources.srcDirs() // deja vacío para que no intente generar recursos
+        }
+    }
 }
 
 kotlin {
@@ -70,8 +76,7 @@ dependencies {
     implementation("org.burnoutcrew.composereorderable:reorderable:0.7.0")
     // (Opcional pero recomendable) Runtime Compose para lifecycle
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.5")
-    implementation("androidx.compose.material:material-icons-extended:<compose_version>")
-
+    implementation("androidx.compose.material:material-icons-extended:1.7.0")
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
