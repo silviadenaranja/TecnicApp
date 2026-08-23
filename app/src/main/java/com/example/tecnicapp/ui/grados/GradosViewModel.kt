@@ -12,7 +12,6 @@ import com.example.tecnicapp.model.Grado
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-// import com.example.tecnicapp.data.importarTecnicasDesdePdf   // si lo usas
 
 data class GradosUiState(
     val grados: List<Grado> = emptyList(),
@@ -26,6 +25,13 @@ data class FriendsUiState(
     val friends: List<Friend> = emptyList()
 )
 
+data class ShareDataUiState(
+    val isLoading: Boolean = false,
+    val error: String? = null,
+    val friendToOverwrite: Friend? = null,
+    val shareSuccessMessage: String? = null
+)
+
 class GradosViewModel(
     private val repo: FirestoreRepository = FirestoreRepository(),
     private val friendsRepo: FriendsRepository = FriendsRepository()
@@ -37,58 +43,95 @@ class GradosViewModel(
     var friendsState by mutableStateOf(FriendsUiState())
         private set
 
+    var shareDataState by mutableStateOf(ShareDataUiState())
+        private set
+
     init {
         loadGrados()
     }
 
-    // ---------- GRADOS ----------
+    // -------------------------------------------------------
+    // GRADOS
+    // -------------------------------------------------------
+
+    fun currentUserUid(): String = repo.currentUserUid()
 
     fun loadGrados() {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            _uiState.value = GradosUiState(
+                grados = emptyList(),
+                isLoading = true,
+                error = null
+            )
+
             val result = repo.getGrados()
+
             _uiState.value = if (result.isSuccess) {
-                _uiState.value.copy(
+                GradosUiState(
+                    grados = result.getOrNull().orEmpty(),
                     isLoading = false,
-                    grados = result.getOrDefault(emptyList()),
                     error = null
                 )
             } else {
-                _uiState.value.copy(
+                GradosUiState(
+                    grados = emptyList(),
                     isLoading = false,
                     error = result.exceptionOrNull()?.localizedMessage
+                        ?: "No se pudieron cargar los grados"
                 )
             }
         }
     }
 
     fun addGrado(nombre: String) {
-        viewModelScope.launch {
-            val trimmed = nombre.trim()
-            if (trimmed.isEmpty()) return@launch
+        val cleanName = nombre.trim()
 
-            val result = repo.addGrado(trimmed)
+        if (cleanName.isBlank()) {
+            _uiState.value = _uiState.value.copy(
+                error = "El nombre del grado es obligatorio"
+            )
+            return
+        }
+
+        viewModelScope.launch {
+            val result = repo.addGrado(cleanName)
+
             if (result.isSuccess) {
                 loadGrados()
             } else {
                 _uiState.value = _uiState.value.copy(
                     error = result.exceptionOrNull()?.localizedMessage
+                        ?: "Error al crear el grado"
                 )
             }
         }
     }
 
-    fun updateGrado(grado: Grado, nuevoNombre: String) {
-        viewModelScope.launch {
-            val trimmed = nuevoNombre.trim()
-            if (trimmed.isEmpty()) return@launch
+    fun updateGrado(
+        grado: Grado,
+        nuevoNombre: String
+    ) {
+        val cleanName = nuevoNombre.trim()
 
-            val result = repo.updateGrado(grado.id, trimmed)
+        if (cleanName.isBlank()) {
+            _uiState.value = _uiState.value.copy(
+                error = "El nombre del grado es obligatorio"
+            )
+            return
+        }
+
+        viewModelScope.launch {
+            val result = repo.updateGrado(
+                gradoId = grado.id,
+                nuevoNombre = cleanName
+            )
+
             if (result.isSuccess) {
                 loadGrados()
             } else {
                 _uiState.value = _uiState.value.copy(
                     error = result.exceptionOrNull()?.localizedMessage
+                        ?: "Error al editar el grado"
                 )
             }
         }
@@ -97,11 +140,13 @@ class GradosViewModel(
     fun deleteGrado(grado: Grado) {
         viewModelScope.launch {
             val result = repo.deleteGrado(grado.id)
+
             if (result.isSuccess) {
                 loadGrados()
             } else {
                 _uiState.value = _uiState.value.copy(
                     error = result.exceptionOrNull()?.localizedMessage
+                        ?: "Error al eliminar el grado"
                 )
             }
         }
@@ -111,84 +156,238 @@ class GradosViewModel(
         _uiState.value = _uiState.value.copy(error = null)
     }
 
-    fun currentUserUid(): String = repo.currentUserUid()
-
-    // Si quieres reactivar importar desde PDF:
-    /*
-    fun importarTecnicas() {
-        viewModelScope.launch {
-            try {
-                _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-                importarTecnicasDesdePdf()
-                _uiState.value = _uiState.value.copy(isLoading = false)
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = e.message ?: "Error importando técnicas"
-                )
-            }
-        }
-    }
-    */
-
-    // ---------- AMIGOS ----------
+    // -------------------------------------------------------
+    // AMIGOS
+    // -------------------------------------------------------
 
     fun loadFriends() {
         viewModelScope.launch {
-            friendsState = friendsState.copy(isLoading = true, error = null)
+            friendsState = friendsState.copy(
+                isLoading = true,
+                error = null
+            )
+
             val result = friendsRepo.getFriends()
+
             friendsState = if (result.isSuccess) {
-                friendsState.copy(
+                FriendsUiState(
                     isLoading = false,
-                    friends = result.getOrNull().orEmpty()
+                    friends = result.getOrNull().orEmpty(),
+                    error = null
                 )
             } else {
-                friendsState.copy(
+                FriendsUiState(
                     isLoading = false,
+                    friends = emptyList(),
                     error = result.exceptionOrNull()?.localizedMessage
+                        ?: "Error cargando amigos"
                 )
             }
         }
     }
 
-    fun addFriend(uidAmigo: String, nombre: String) {
-        viewModelScope.launch {
-            val trimmedUid = uidAmigo.trim()
-            val trimmedName = nombre.trim()
-            if (trimmedUid.isEmpty() || trimmedName.isEmpty()) return@launch
+    fun addFriend(
+        uidAmigo: String,
+        nombre: String
+    ) {
+        val cleanUid = uidAmigo.trim()
+        val cleanName = nombre.trim()
 
-            val result = friendsRepo.addFriend(trimmedUid, trimmedName)
+        if (cleanUid.isBlank() || cleanName.isBlank()) {
+            friendsState = friendsState.copy(
+                error = "El UID y el nombre son obligatorios"
+            )
+            return
+        }
+
+        viewModelScope.launch {
+            friendsState = friendsState.copy(
+                isLoading = true,
+                error = null
+            )
+
+            val result = friendsRepo.addFriend(
+                uidAmigo = cleanUid,
+                nombre = cleanName
+            )
+
             if (result.isSuccess) {
                 loadFriends()
             } else {
                 friendsState = friendsState.copy(
+                    isLoading = false,
                     error = result.exceptionOrNull()?.localizedMessage
+                        ?: "No se ha podido añadir el amigo"
                 )
             }
         }
     }
 
-    fun sendMyDataToFriend(friendUid: String) {
+    fun deleteFriend(friend: Friend) {
         viewModelScope.launch {
-            friendsState = friendsState.copy(isLoading = true, error = null)
-            val currentUid = repo.currentUserUid()
-            if (currentUid.isBlank()) {
+            friendsState = friendsState.copy(
+                isLoading = true,
+                error = null
+            )
+
+            val result = friendsRepo.deleteFriend(friend.id)
+
+            if (result.isSuccess) {
+                loadFriends()
+            } else {
                 friendsState = friendsState.copy(
                     isLoading = false,
-                    error = "No hay usuario autenticado"
+                    error = result.exceptionOrNull()?.localizedMessage
+                        ?: "No se ha podido eliminar el amigo"
+                )
+            }
+        }
+    }
+
+    // -------------------------------------------------------
+    // COMPARTIR / SOBRESCRIBIR
+    // -------------------------------------------------------
+
+    fun prepareShareDataToFriend(friend: Friend) {
+        viewModelScope.launch {
+            shareDataState = ShareDataUiState(isLoading = true)
+
+            val result = repo.userHasGrados(friend.uidAmigo)
+
+            if (result.isFailure) {
+                shareDataState = ShareDataUiState(
+                    error = result.exceptionOrNull()?.localizedMessage
+                        ?: "No se ha podido comprobar si el amigo ya tiene datos"
                 )
                 return@launch
             }
 
-            val result = repo.copyGradosAndTecnicasToUser(currentUid, friendUid)
-            friendsState = if (result.isSuccess) {
-                friendsState.copy(isLoading = false)
+            val friendHasData = result.getOrDefault(false)
+
+            if (friendHasData) {
+                /*
+                 * No copiamos todavía. Dejamos a la UI mostrar el diálogo
+                 * de confirmación de sobrescritura.
+                 */
+                shareDataState = ShareDataUiState(
+                    friendToOverwrite = friend
+                )
             } else {
-                friendsState.copy(
-                    isLoading = false,
-                    error = result.exceptionOrNull()?.localizedMessage
+                copyMyDataToFriend(
+                    friendUid = friend.uidAmigo,
+                    friendName = friend.nombre,
+                    overwrite = false
                 )
             }
         }
+    }
+
+    fun confirmOverwriteData(friend: Friend) {
+        viewModelScope.launch {
+            copyMyDataToFriend(
+                friendUid = friend.uidAmigo,
+                friendName = friend.nombre,
+                overwrite = true
+            )
+        }
+    }
+
+    fun cancelOverwriteData() {
+        shareDataState = ShareDataUiState()
+    }
+
+    private suspend fun copyMyDataToFriend(
+        friendUid: String,
+        friendName: String,
+        overwrite: Boolean
+    ) {
+        val currentUid = repo.currentUserUid()
+
+        if (currentUid.isBlank()) {
+            shareDataState = ShareDataUiState(
+                error = "No hay usuario autenticado"
+            )
+            return
+        }
+
+        if (friendUid.isBlank()) {
+            shareDataState = ShareDataUiState(
+                error = "El UID del amigo no es válido"
+            )
+            return
+        }
+
+        if (currentUid == friendUid) {
+            shareDataState = ShareDataUiState(
+                error = "No puedes compartir datos contigo misma"
+            )
+            return
+        }
+
+        shareDataState = ShareDataUiState(isLoading = true)
+
+        val result = if (overwrite) {
+            repo.overwriteGradosAndTecnicasToUser(
+                fromUid = currentUid,
+                toUid = friendUid
+            )
+        } else {
+            repo.copyGradosAndTecnicasToUser(
+                fromUid = currentUid,
+                toUid = friendUid
+            )
+        }
+
+        shareDataState = if (result.isSuccess) {
+            ShareDataUiState(
+                shareSuccessMessage = if (overwrite) {
+                    "Los datos de $friendName se han sobrescrito correctamente"
+                } else {
+                    "Grados y técnicas enviados a $friendName"
+                }
+            )
+        } else {
+            ShareDataUiState(
+                error = result.exceptionOrNull()?.localizedMessage
+                    ?: "No se han podido enviar los datos"
+            )
+        }
+    }
+
+    /*
+     * Solo borra mensajes. No borres todo ShareDataUiState aquí,
+     * porque podría desaparecer friendToOverwrite antes de que
+     * el diálogo use esa información.
+     */
+    fun clearShareMessage() {
+        shareDataState = shareDataState.copy(
+            error = null,
+            shareSuccessMessage = null
+        )
+    }
+
+    // -------------------------------------------------------
+    // CAMBIO / LOGOUT DE USUARIO
+    // -------------------------------------------------------
+
+    fun clearUserData() {
+        _uiState.value = GradosUiState(
+            grados = emptyList(),
+            isLoading = false,
+            error = null
+        )
+
+        friendsState = FriendsUiState(
+            isLoading = false,
+            error = null,
+            friends = emptyList()
+        )
+
+        shareDataState = ShareDataUiState(
+            isLoading = false,
+            error = null,
+            friendToOverwrite = null,
+            shareSuccessMessage = null
+        )
     }
 }

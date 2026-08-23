@@ -1,10 +1,12 @@
 package com.example.tecnicapp.ui.tecnicas
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.tecnicapp.model.Tecnica
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Source
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -22,14 +24,16 @@ class TecnicasViewModel(
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()
 ) : ViewModel() {
 
-    private fun tecnicasCollection() =
-        auth.currentUser?.uid?.let { uid ->
-            db.collection("users")
-                .document(uid)
-                .collection("grados")
-                .document(gradoId)
-                .collection("tecnicas")
-        } ?: throw IllegalStateException("Usuario no autenticado")
+    private fun currentUid(): String {
+        return auth.currentUser?.uid
+            ?: throw IllegalStateException("Usuario no autenticado")
+    }
+
+    private fun tecnicasCollection() = db.collection("users")
+        .document(currentUid())
+        .collection("grados")
+        .document(gradoId)
+        .collection("tecnicas")
 
     private val _uiState = MutableStateFlow(TecnicasUiState())
     val uiState: StateFlow<TecnicasUiState> = _uiState
@@ -38,37 +42,51 @@ class TecnicasViewModel(
         cargarTecnicas()
     }
 
-    private fun cargarTecnicas() {
+    fun cargarTecnicas() {
         viewModelScope.launch {
             try {
-                android.util.Log.d("TEC", "gradoId=$gradoId")
-                _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+                val uid = currentUid()
+
+                Log.d(
+                    "TECNIAPP_TECNICAS",
+                    "Cargando técnicas: uid=$uid, gradoId=$gradoId"
+                )
+
+                _uiState.value = _uiState.value.copy(
+                    isLoading = true,
+                    error = null
+                )
 
                 val snapshot = tecnicasCollection()
                     .orderBy("orden")
-                    .get()
+                    .get(Source.SERVER)
                     .await()
 
                 val lista = snapshot.documents.map { doc ->
                     Tecnica(
                         id = doc.id,
-                        nombre = doc.getString("nombre") ?: "",
-                        alias = doc.getString("alias") ?: "",
-                        posicion = doc.getString("posicion") ?: "",
-                        atacante = doc.getString("atacante") ?: "",
-                        defensor = doc.getString("defensor") ?: "",
-                        altura = doc.getString("altura") ?: "",
-                        descripcion = doc.getString("descripcion") ?: "",
+                        nombre = doc.getString("nombre").orEmpty(),
+                        alias = doc.getString("alias").orEmpty(),
+                        posicion = doc.getString("posicion").orEmpty(),
+                        atacante = doc.getString("atacante").orEmpty(),
+                        defensor = doc.getString("defensor").orEmpty(),
+                        altura = doc.getString("altura").orEmpty(),
+                        descripcion = doc.getString("descripcion").orEmpty(),
                         orden = (doc.getLong("orden") ?: 0L).toInt()
                     )
                 }
 
                 _uiState.value = TecnicasUiState(
                     isLoading = false,
-                    tecnicas = lista,
-                    error = null
+                    tecnicas = lista
                 )
             } catch (e: Exception) {
+                Log.e(
+                    "TECNIAPP_TECNICAS",
+                    "Error al cargar técnicas",
+                    e
+                )
+
                 _uiState.value = TecnicasUiState(
                     isLoading = false,
                     tecnicas = emptyList(),
@@ -89,7 +107,8 @@ class TecnicasViewModel(
     ) {
         viewModelScope.launch {
             try {
-                val nuevaOrden = (_uiState.value.tecnicas.maxOfOrNull { it.orden } ?: -1) + 1
+                val nuevaOrden =
+                    (_uiState.value.tecnicas.maxOfOrNull { it.orden } ?: -1) + 1
 
                 val data = hashMapOf(
                     "nombre" to nombre,
@@ -106,7 +125,7 @@ class TecnicasViewModel(
                     .add(data)
                     .await()
 
-                val nueva = Tecnica(
+                val nuevaTecnica = Tecnica(
                     id = docRef.id,
                     nombre = nombre,
                     alias = alias,
@@ -119,7 +138,7 @@ class TecnicasViewModel(
                 )
 
                 _uiState.value = _uiState.value.copy(
-                    tecnicas = _uiState.value.tecnicas + nueva,
+                    tecnicas = _uiState.value.tecnicas + nuevaTecnica,
                     error = null
                 )
             } catch (e: Exception) {
@@ -157,22 +176,22 @@ class TecnicasViewModel(
                     .update(data)
                     .await()
 
-                val listaActualizada = _uiState.value.tecnicas.map {
-                    if (it.id == tecnica.id) {
-                        it.copy(
-                            nombre = nombre,
-                            alias = alias,
-                            posicion = posicion,
-                            atacante = atacante,
-                            defensor = defensor,
-                            altura = altura,
-                            descripcion = descripcion
-                        )
-                    } else it
-                }
-
                 _uiState.value = _uiState.value.copy(
-                    tecnicas = listaActualizada,
+                    tecnicas = _uiState.value.tecnicas.map { item ->
+                        if (item.id == tecnica.id) {
+                            item.copy(
+                                nombre = nombre,
+                                alias = alias,
+                                posicion = posicion,
+                                atacante = atacante,
+                                defensor = defensor,
+                                altura = altura,
+                                descripcion = descripcion
+                            )
+                        } else {
+                            item
+                        }
+                    },
                     error = null
                 )
             } catch (e: Exception) {
@@ -186,16 +205,31 @@ class TecnicasViewModel(
     fun deleteTecnica(tecnica: Tecnica) {
         viewModelScope.launch {
             try {
+                val uid = currentUid()
+
+                Log.d(
+                    "TECNIAPP_TECNICAS",
+                    "Borrando técnica: uid=$uid, gradoId=$gradoId, tecnicaId=${tecnica.id}"
+                )
+
                 tecnicasCollection()
                     .document(tecnica.id)
                     .delete()
                     .await()
 
                 _uiState.value = _uiState.value.copy(
-                    tecnicas = _uiState.value.tecnicas.filter { it.id != tecnica.id },
+                    tecnicas = _uiState.value.tecnicas.filter {
+                        it.id != tecnica.id
+                    },
                     error = null
                 )
             } catch (e: Exception) {
+                Log.e(
+                    "TECNIAPP_TECNICAS",
+                    "Error al borrar técnica",
+                    e
+                )
+
                 _uiState.value = _uiState.value.copy(
                     error = e.message ?: "Error al eliminar técnica"
                 )
@@ -205,7 +239,10 @@ class TecnicasViewModel(
 
     fun moveTecnica(fromIndex: Int, toIndex: Int) {
         val lista = _uiState.value.tecnicas.toMutableList()
-        if (fromIndex !in lista.indices || toIndex !in lista.indices) return
+
+        if (fromIndex !in lista.indices || toIndex !in lista.indices) {
+            return
+        }
 
         val item = lista.removeAt(fromIndex)
         lista.add(toIndex, item)

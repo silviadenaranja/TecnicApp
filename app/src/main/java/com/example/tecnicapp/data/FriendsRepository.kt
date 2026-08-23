@@ -15,20 +15,59 @@ class FriendsRepository(
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()
 ) {
 
+    private fun currentUid(): String {
+        return auth.currentUser?.uid.orEmpty()
+    }
+
     private fun friendsCollection() = db.collection("users")
-        .document(auth.currentUser?.uid ?: "")
+        .document(currentUid())
         .collection("friends")
 
-    suspend fun addFriend(uidAmigo: String, nombre: String): Result<Unit> {
-        val data = mapOf(
-            "uidAmigo" to uidAmigo,
-            "nombre" to nombre
-        )
-
+    suspend fun addFriend(
+        uidAmigo: String,
+        nombre: String
+    ): Result<Unit> {
         return try {
+            val myUid = currentUid()
+
+            if (myUid.isBlank()) {
+                return Result.failure(
+                    IllegalStateException("No hay usuario autenticado")
+                )
+            }
+
+            if (uidAmigo.isBlank() || nombre.isBlank()) {
+                return Result.failure(
+                    IllegalArgumentException("El UID y el nombre son obligatorios")
+                )
+            }
+
+            if (uidAmigo == myUid) {
+                return Result.failure(
+                    IllegalArgumentException("No puedes añadirte a ti misma como amiga")
+                )
+            }
+
+            val existingFriend = friendsCollection()
+                .whereEqualTo("uidAmigo", uidAmigo)
+                .get()
+                .await()
+
+            if (!existingFriend.isEmpty) {
+                return Result.failure(
+                    IllegalArgumentException("Este amigo ya está en tu lista")
+                )
+            }
+
+            val data = mapOf(
+                "uidAmigo" to uidAmigo.trim(),
+                "nombre" to nombre.trim()
+            )
+
             friendsCollection()
                 .add(data)
-                .await()  // requiere kotlinx-coroutines-play-services
+                .await()
+
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -37,6 +76,12 @@ class FriendsRepository(
 
     suspend fun getFriends(): Result<List<Friend>> {
         return try {
+            val uid = currentUid()
+
+            if (uid.isBlank()) {
+                return Result.success(emptyList())
+            }
+
             val snapshot = friendsCollection()
                 .get()
                 .await()
@@ -44,12 +89,37 @@ class FriendsRepository(
             val friends = snapshot.documents.map { doc ->
                 Friend(
                     id = doc.id,
-                    uidAmigo = doc.getString("uidAmigo") ?: "",
-                    nombre = doc.getString("nombre") ?: ""
+                    uidAmigo = doc.getString("uidAmigo").orEmpty(),
+                    nombre = doc.getString("nombre").orEmpty()
+                )
+            }.sortedBy { it.nombre.lowercase() }
+
+            Result.success(friends)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteFriend(friendId: String): Result<Unit> {
+        return try {
+            if (currentUid().isBlank()) {
+                return Result.failure(
+                    IllegalStateException("No hay usuario autenticado")
                 )
             }
 
-            Result.success(friends)
+            if (friendId.isBlank()) {
+                return Result.failure(
+                    IllegalArgumentException("No se ha encontrado el amigo")
+                )
+            }
+
+            friendsCollection()
+                .document(friendId)
+                .delete()
+                .await()
+
+            Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }
