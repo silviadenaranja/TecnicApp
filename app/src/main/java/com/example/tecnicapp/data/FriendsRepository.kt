@@ -9,7 +9,12 @@ data class Friend(
     val uidAmigo: String = "",
     val nombre: String = ""
 )
-
+data class FriendsUiState(
+    val isLoading: Boolean = false,
+    val friends: List<Friend> = emptyList(),
+    val error: String? = null,
+    val friendAdded: Boolean = false
+)
 class FriendsRepository(
     private val db: FirebaseFirestore = FirebaseFirestore.getInstance(),
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()

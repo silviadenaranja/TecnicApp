@@ -1,5 +1,6 @@
 package com.example.tecnicapp.ui.grados
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,9 +11,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowForward
@@ -21,11 +24,13 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -43,7 +48,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,9 +64,26 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.tecnicapp.data.Friend
+import com.example.tecnicapp.data.FriendsUiState
 import com.example.tecnicapp.model.Grado
 import com.example.tecnicapp.ui.auth.AuthViewModel
 import kotlinx.coroutines.launch
+
+data class TecnicaSeleccionable(
+    val gradoId: String = "",
+    val gradoNombre: String = "",
+    val gradoNumero: Int = 0,
+    val tecnicaId: String = "",
+    val nombre: String = "",
+    val datos: Map<String, Any?> = emptyMap()
+)
+
+data class SeleccionTecnicasUiState(
+    val isLoading: Boolean = false,
+    val tecnicas: List<TecnicaSeleccionable> = emptyList(),
+    val seleccionadas: Set<String> = emptySet(),
+    val error: String? = null
+)
 
 enum class GradosSortOrder {
     ASC,
@@ -78,17 +99,11 @@ fun GradosScreen(
     onVerTodasTecnicas: () -> Unit,
     onLoggedOut: () -> Unit
 ) {
-    val state by vm.uiState.collectAsState()
-
-    LaunchedEffect(state.grados, state.isLoading) {
-        android.util.Log.d(
-            "TECNIAPP_GRADOS_SCREEN",
-            "Pantalla: loading=${state.isLoading}, grados=${state.grados.size}"
-        )
-    }
+    val state = vm.uiState
 
     val friendsState = vm.friendsState
     val shareDataState = vm.shareDataState
+    val seleccionTecnicasState = vm.seleccionTecnicasState
     val changePassState = authVm.changePassState
 
     val clipboardManager = LocalClipboardManager.current
@@ -107,14 +122,21 @@ fun GradosScreen(
     var menuExpanded by remember { mutableStateOf(false) }
     var showChangePassDialog by remember { mutableStateOf(false) }
 
+    var showFriendsMenuDialog by remember { mutableStateOf(false) }
     var showFriendsDialog by remember { mutableStateOf(false) }
     var showAddFriendDialog by remember { mutableStateOf(false) }
 
     var showShareDialog by remember { mutableStateOf(false) }
     var showCloneDialog by remember { mutableStateOf(false) }
 
+    var showSeleccionTecnicasDialog by remember { mutableStateOf(false) }
+    var modoSeleccion by remember { mutableStateOf("compartir") }
+    var amigoSeleccionado by remember { mutableStateOf<Friend?>(null) }
+
     var friendToDelete by remember { mutableStateOf<Friend?>(null) }
     var showDeleteFriendDialog by remember { mutableStateOf(false) }
+
+    var showSolicitudesDialog by remember { mutableStateOf(false) }
 
     val gradosOrdenados = when (sortOrder) {
         GradosSortOrder.ASC -> {
@@ -124,6 +146,11 @@ fun GradosScreen(
         GradosSortOrder.DESC -> {
             state.grados.sortedByDescending { it.nombre.lowercase() }
         }
+    }
+
+    LaunchedEffect(Unit) {
+        vm.loadGrados()
+        vm.cargarSolicitudesRecibidas()
     }
 
     LaunchedEffect(
@@ -145,6 +172,13 @@ fun GradosScreen(
         if (!error.isNullOrBlank()) {
             snackbarHostState.showSnackbar(error)
             vm.clearError()
+        }
+    }
+
+    LaunchedEffect(vm.friendAddedSuccessfully) {
+        if (vm.friendAddedSuccessfully) {
+            showAddFriendDialog = false
+            vm.clearFriendAdded()
         }
     }
 
@@ -199,10 +233,26 @@ fun GradosScreen(
                                 menuExpanded = true
                             }
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Menu,
-                                contentDescription = "Menú"
-                            )
+                            Box {
+                                Icon(
+                                    imageVector = Icons.Default.Menu,
+                                    contentDescription = "Menú"
+                                )
+
+                                if (vm.solicitudesRecibidas.isNotEmpty()) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .size(12.dp)
+                                            .background(
+                                                color = Color.Red,
+                                                shape = CircleShape
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                    }
+                                }
+                            }
                         }
 
                         DropdownMenu(
@@ -247,7 +297,44 @@ fun GradosScreen(
                                 onClick = {
                                     menuExpanded = false
                                     vm.loadFriends()
-                                    showFriendsDialog = true
+                                    showFriendsMenuDialog = true
+                                }
+                            )
+
+                            DropdownMenuItem(
+                                text = {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                      //  Spacer(modifier = Modifier.width(8.dp))
+
+                                        Text("Solicitudes recibidas")
+
+                                        if (vm.solicitudesRecibidas.isNotEmpty()) {
+                                            Spacer(modifier = Modifier.width(8.dp))
+
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(24.dp)
+                                                    .background(
+                                                        color = Color.Red,
+                                                        shape = CircleShape
+                                                    ),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    text = vm.solicitudesRecibidas.size.toString(),
+                                                    color = Color.White,
+                                                    style = MaterialTheme.typography.labelSmall
+                                                )
+                                            }
+                                        }
+                                    }
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    vm.cargarSolicitudesRecibidas()
+                                    showSolicitudesDialog = true
                                 }
                             )
 
@@ -257,6 +344,7 @@ fun GradosScreen(
                                 },
                                 onClick = {
                                     menuExpanded = false
+                                    modoSeleccion = "compartir"
                                     vm.loadFriends()
                                     showShareDialog = true
                                 }
@@ -268,6 +356,7 @@ fun GradosScreen(
                                 },
                                 onClick = {
                                     menuExpanded = false
+                                    modoSeleccion = "clonar"
                                     vm.loadFriends()
                                     showCloneDialog = true
                                 }
@@ -438,6 +527,23 @@ fun GradosScreen(
                 }
             }
 
+            if (showSolicitudesDialog) {
+                SolicitudesDialog(
+                    solicitudes = vm.solicitudesRecibidas,
+                    isLoading = vm.solicitudesLoading,
+                    error = vm.solicitudesError,
+                    onDismiss = {
+                        showSolicitudesDialog = false
+                    },
+                    onAceptar = { solicitudId ->
+                        vm.aceptarSolicitud(solicitudId)
+                    },
+                    onRechazar = { solicitudId ->
+                        vm.rechazarSolicitud(solicitudId)
+                    }
+                )
+            }
+
             if (showGradoDialog) {
                 AlertDialog(
                     onDismissRequest = {
@@ -542,15 +648,65 @@ fun GradosScreen(
                 )
             }
 
+            if (showFriendsMenuDialog) {
+                AlertDialog(
+                    onDismissRequest = {
+                        showFriendsMenuDialog = false
+                    },
+                    title = {
+                        Text("Amigos")
+                    },
+                    text = {
+                        Column {
+                            Button(
+                                onClick = {
+                                    showFriendsMenuDialog = false
+                                    showAddFriendDialog = true
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = null
+                                )
+
+                                Spacer(modifier = Modifier.width(8.dp))
+
+                                Text("Añadir amigo")
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Button(
+                                onClick = {
+                                    showFriendsMenuDialog = false
+                                    vm.loadFriends()
+                                    showFriendsDialog = true
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Ver amigos")
+                            }
+                        }
+                    },
+                    confirmButton = {},
+                    dismissButton = {
+                        TextButton(
+                            onClick = {
+                                showFriendsMenuDialog = false
+                            }
+                        ) {
+                            Text("Cerrar")
+                        }
+                    }
+                )
+            }
+
             if (showFriendsDialog) {
                 FriendsDialog(
                     friendsState = friendsState,
                     onDismiss = {
                         showFriendsDialog = false
-                    },
-                    onAddFriendClick = {
-                        showFriendsDialog = false
-                        showAddFriendDialog = true
                     },
                     onDeleteFriendClick = { friend ->
                         friendToDelete = friend
@@ -564,6 +720,7 @@ fun GradosScreen(
                     friendsState = friendsState,
                     onDismiss = {
                         showAddFriendDialog = false
+                        vm.clearFriendAdded()
                     },
                     onAddFriend = { uid, nombre ->
                         vm.addFriend(
@@ -623,8 +780,8 @@ fun GradosScreen(
                 ShareOrCloneDialog(
                     title = "Compartir mis técnicas con un compañero",
                     description = "Selecciona un amigo existente o introduce el UID de un compañero. " +
-                            "Se crearán grados nuevos llamados Copia_[nombre del grado] en su cuenta. " +
-                            "Sus grados y técnicas actuales no se borrarán.",
+                            "Después podrás elegir qué técnicas tuyas quieres compartir. " +
+                            "El compañero recibirá una solicitud y podrá aceptarla o rechazarla.",
                     friends = friendsState.friends,
                     isLoading = friendsState.isLoading,
                     onDismiss = {
@@ -632,17 +789,25 @@ fun GradosScreen(
                     },
                     onFriendSelected = { friend ->
                         showShareDialog = false
-                        vm.shareGradosAndTecnicasToFriend(friend)
+                        amigoSeleccionado = friend
+                        modoSeleccion = "compartir"
+
+                        vm.cargarTecnicasParaSeleccion()
+
+                        showSeleccionTecnicasDialog = true
                     },
                     onUidSelected = { uid ->
                         showShareDialog = false
-                        vm.shareGradosAndTecnicasToFriend(
-                            Friend(
-                                id = uid,
-                                uidAmigo = uid,
-                                nombre = "Compañero"
-                            )
+                        amigoSeleccionado = Friend(
+                            id = uid,
+                            uidAmigo = uid,
+                            nombre = "Compañero"
                         )
+                        modoSeleccion = "compartir"
+
+                        vm.cargarTecnicasParaSeleccion()
+
+                        showSeleccionTecnicasDialog = true
                     },
                     onAddFriendClick = {
                         showShareDialog = false
@@ -655,8 +820,8 @@ fun GradosScreen(
                 ShareOrCloneDialog(
                     title = "Clonar técnicas de un compañero",
                     description = "Selecciona un amigo existente o introduce el UID de un compañero. " +
-                            "Solo se añadirán las técnicas que todavía no tengas con el mismo nombre. " +
-                            "Tus técnicas actuales no se borrarán.",
+                            "Después podrás elegir qué técnicas de ese compañero quieres clonar. " +
+                            "Se crearán en tu cuenta los grados necesarios y solo se añadirán las técnicas que todavía no tengas.",
                     friends = friendsState.friends,
                     isLoading = friendsState.isLoading,
                     onDismiss = {
@@ -664,15 +829,65 @@ fun GradosScreen(
                     },
                     onFriendSelected = { friend ->
                         showCloneDialog = false
-                        vm.cloneTechniquesFromFriend(friend.uidAmigo)
+                        amigoSeleccionado = friend
+                        modoSeleccion = "clonar"
+
+                        vm.cargarTecnicasDeCompaniero(friend.uidAmigo)
+
+                        showSeleccionTecnicasDialog = true
                     },
                     onUidSelected = { uid ->
                         showCloneDialog = false
-                        vm.cloneTechniquesFromFriend(uid)
+                        amigoSeleccionado = Friend(
+                            id = uid,
+                            uidAmigo = uid,
+                            nombre = "Compañero"
+                        )
+                        modoSeleccion = "clonar"
+
+                        vm.cargarTecnicasDeCompaniero(uid)
+
+                        showSeleccionTecnicasDialog = true
                     },
                     onAddFriendClick = {
                         showCloneDialog = false
                         showAddFriendDialog = true
+                    }
+                )
+            }
+
+            val amigoParaSeleccion = amigoSeleccionado
+
+            if (showSeleccionTecnicasDialog && amigoParaSeleccion != null) {
+                SeleccionTecnicasDialog(
+                    state = seleccionTecnicasState,
+                    titulo = if (modoSeleccion == "compartir") {
+                        "Selecciona técnicas para compartir"
+                    } else {
+                        "Selecciona técnicas para clonar"
+                    },
+                    onDismiss = {
+                        showSeleccionTecnicasDialog = false
+                    },
+                    onToggleTecnica = { tecnica ->
+                        vm.alternarSeleccionTecnica(tecnica)
+                    },
+                    onSeleccionarTodas = {
+                        vm.seleccionarTodasLasTecnicas()
+                    },
+                    onDeseleccionarTodas = {
+                        vm.deseleccionarTodasLasTecnicas()
+                    },
+                    onConfirmar = {
+                        if (modoSeleccion == "compartir") {
+                            vm.compartirTecnicasSeleccionadas(amigoParaSeleccion)
+                        } else {
+                            vm.clonarTecnicasSeleccionadas(
+                                amigoParaSeleccion.uidAmigo
+                            )
+                        }
+
+                        showSeleccionTecnicasDialog = false
                     }
                 )
             }
@@ -684,32 +899,15 @@ fun GradosScreen(
 private fun FriendsDialog(
     friendsState: FriendsUiState,
     onDismiss: () -> Unit,
-    onAddFriendClick: () -> Unit,
     onDeleteFriendClick: (Friend) -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text("Amigos")
+            Text("Mis amigos")
         },
         text = {
             Column {
-                Button(
-                    onClick = onAddFriendClick,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = null
-                    )
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    Text("Añadir amigo")
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
                 when {
                     friendsState.isLoading -> {
                         Box(
@@ -725,33 +923,44 @@ private fun FriendsDialog(
                     friendsState.friends.isEmpty() -> {
                         Text(
                             text = "Todavía no tienes amigos añadidos",
-                            color = Color.Gray
+                            color = Color.Gray,
+                            fontSize = 14.sp
                         )
                     }
 
                     else -> {
-                        friendsState.friends.forEach { friend ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = friend.nombre,
-                                    modifier = Modifier.weight(1f)
-                                )
-
-                                IconButton(
-                                    onClick = {
-                                        onDeleteFriendClick(friend)
-                                    }
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(300.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            items(
+                                items = friendsState.friends,
+                                key = { it.id }
+                            ) { friend ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = "Eliminar amigo",
-                                        tint = Color.Black
+                                    Text(
+                                        text = friend.nombre,
+                                        modifier = Modifier.weight(1f)
                                     )
+
+                                    IconButton(
+                                        onClick = {
+                                            onDeleteFriendClick(friend)
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = "Eliminar amigo",
+                                            tint = Color.Black
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -763,7 +972,8 @@ private fun FriendsDialog(
 
                     Text(
                         text = error,
-                        color = Color.Black
+                        color = Color.Black,
+                        fontSize = 14.sp
                     )
                 }
             }
@@ -922,6 +1132,142 @@ private fun ShareOrCloneDialog(
 }
 
 @Composable
+private fun SeleccionTecnicasDialog(
+    state: SeleccionTecnicasUiState,
+    titulo: String,
+    onDismiss: () -> Unit,
+    onToggleTecnica: (TecnicaSeleccionable) -> Unit,
+    onSeleccionarTodas: () -> Unit,
+    onDeseleccionarTodas: () -> Unit,
+    onConfirmar: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(titulo)
+        },
+        text = {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(
+                        onClick = onSeleccionarTodas
+                    ) {
+                        Text("Seleccionar todas")
+                    }
+
+                    TextButton(
+                        onClick = onDeseleccionarTodas
+                    ) {
+                        Text("Quitar selección")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                if (state.isLoading) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(120.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                } else if (state.tecnicas.isEmpty()) {
+                    Text("No hay técnicas disponibles")
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(350.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        val tecnicasPorGrado: Map<String, List<TecnicaSeleccionable>> =
+                            state.tecnicas.groupBy { tecnica ->
+                                tecnica.gradoNombre
+                            }
+
+                        tecnicasPorGrado.forEach { entrada ->
+                            val gradoNombre = entrada.key
+                            val tecnicas = entrada.value
+
+                            item {
+                                Text(
+                                    text = gradoNombre,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    modifier = Modifier.padding(vertical = 8.dp)
+                                )
+                            }
+
+                            items(
+                                items = tecnicas,
+                                key = { tecnica ->
+                                    "${tecnica.gradoId}_${tecnica.tecnicaId}"
+                                }
+                            ) { tecnica ->
+                                val clave = "${tecnica.gradoId}_${tecnica.tecnicaId}"
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            onToggleTecnica(tecnica)
+                                        }
+                                        .padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Checkbox(
+                                        checked = clave in state.seleccionadas,
+                                        onCheckedChange = {
+                                            onToggleTecnica(tecnica)
+                                        }
+                                    )
+
+                                    Text(
+                                        text = tecnica.nombre.ifBlank {
+                                            "Técnica sin nombre"
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                state.error?.let { error ->
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = error,
+                        color = Color.Black
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = state.seleccionadas.isNotEmpty() &&
+                        !state.isLoading,
+                onClick = onConfirmar
+            ) {
+                Text("Confirmar")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss
+            ) {
+                Text("Cancelar")
+            }
+        }
+    )
+}
+
+@Composable
 private fun AddFriendDialog(
     friendsState: FriendsUiState,
     onDismiss: () -> Unit,
@@ -968,27 +1314,43 @@ private fun AddFriendDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
+                Spacer(modifier = Modifier.height(12.dp))
+
+                if (friendsState.isLoading) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.height(18.dp)
+                        )
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Text("Comprobando UID...")
+                    }
+                }
+
                 friendsState.error?.let { error ->
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     Text(
                         text = error,
-                        color = Color.Black
+                        color = Color.Black,
+                        fontSize = 14.sp
                     )
                 }
             }
         },
         confirmButton = {
-            TextButton(
+            Button(
                 enabled = uidText.trim().isNotBlank() &&
-                        nombreText.trim().isNotBlank(),
+                        nombreText.trim().isNotBlank() &&
+                        !friendsState.isLoading,
                 onClick = {
                     onAddFriend(
                         uidText.trim(),
                         nombreText.trim()
                     )
-
-                    onDismiss()
                 }
             ) {
                 Text("Guardar")
@@ -1166,7 +1528,6 @@ private fun PasswordField(
         }
     )
 }
-
 @Composable
 fun SortMenu(
     sortOrder: GradosSortOrder,
@@ -1224,4 +1585,161 @@ fun SortMenu(
             )
         }
     }
+}
+
+@Composable
+private fun SolicitudesDialog(
+    solicitudes: List<Map<String, Any?>>,
+    isLoading: Boolean,
+    error: String?,
+    onDismiss: () -> Unit,
+    onAceptar: (String) -> Unit,
+    onRechazar: (String) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text("Solicitudes recibidas")
+        },
+        text = {
+            Column {
+                when {
+                    isLoading -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(100.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    }
+
+                    solicitudes.isEmpty() -> {
+                        Text(
+                            text = "No tienes solicitudes pendientes",
+                            color = Color.Gray
+                        )
+                    }
+
+                    else -> {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(300.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(
+                                items = solicitudes,
+                                key = { it["id"].toString() }
+                            ) { solicitud ->
+                                val solicitudId = solicitud["id"].toString()
+                                val nombreEmisor = solicitud["fromNombre"]
+                                    ?.toString()
+                                    .orEmpty()
+
+                                val tecnicas = solicitud["tecnicas"] as? List<*>
+                                    ?: emptyList<Any>()
+
+                                ElevatedCard(
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(12.dp)
+                                    ) {
+                                        Text(
+                                            text = if (nombreEmisor.isBlank()) {
+                                                "Un usuario quiere compartirte técnicas"
+                                            } else {
+                                                "$nombreEmisor quiere compartirte técnicas"
+                                            },
+                                            style = MaterialTheme.typography.titleSmall
+                                        )
+
+                                        Spacer(modifier = Modifier.height(4.dp))
+
+                                        Text(
+                                            text = "Técnicas incluidas: ${tecnicas.size}",
+                                            fontSize = 14.sp
+                                        )
+
+                                        if (tecnicas.isNotEmpty()) {
+                                            Spacer(modifier = Modifier.height(8.dp))
+
+                                            Text(
+                                                text = "Técnicas que quiere compartir:",
+                                                style = MaterialTheme.typography.titleSmall
+                                            )
+
+                                            Spacer(modifier = Modifier.height(4.dp))
+
+                                            Column {
+                                                tecnicas.forEach { tecnicaItem ->
+                                                    val datosTecnica = tecnicaItem as? Map<*, *>
+
+                                                    val nombreTecnica = datosTecnica?.get("nombre")
+                                                        ?.toString()
+                                                        ?.trim()
+                                                        .orEmpty()
+
+                                                    if (nombreTecnica.isNotBlank()) {
+                                                        Text(
+                                                            text = "• $nombreTecnica",
+                                                            fontSize = 14.sp
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(12.dp))
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.End
+                                        ) {
+                                            TextButton(
+                                                onClick = {
+                                                    onRechazar(solicitudId)
+                                                }
+                                            ) {
+                                                Text("No")
+                                            }
+
+                                            Button(
+                                                onClick = {
+                                                    onAceptar(solicitudId)
+                                                }
+                                            ) {
+                                                Text("Sí")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                error?.let { mensajeError ->
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = mensajeError,
+                        color = Color.Black
+                    )
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss
+            ) {
+                Text("Cerrar")
+            }
+        }
+    )
 }
