@@ -194,10 +194,70 @@ class FirestoreRepository(
         }
     }
 
-    suspend fun copyGradosAndTecnicasToUser(
+//suspend fun copyGradosAndTecnicasToUser(
+//    fromUid: String,
+//    toUid: String
+//): Result<Unit> {
+//    return try {
+//        if (fromUid.isBlank() || toUid.isBlank()) {
+//            return Result.failure(
+//                IllegalArgumentException("UID origen o destino vacío")
+//            )
+//        }
+
+//        if (fromUid == toUid) {
+//            return Result.failure(
+//                IllegalArgumentException(
+//                    "No puedes copiar tus datos a tu propia cuenta"
+//                )
+//            )
+//        }
+
+//        val gradosOrigen = db.collection("users")
+//            .document(fromUid)
+//            .collection("grados")
+//            .get(Source.SERVER)
+//            .await()
+
+//        for (gradoOrigen in gradosOrigen.documents) {
+//            val datosGrado = gradoOrigen.data ?: continue
+
+//            val gradoDestino = db.collection("users")
+//                .document(toUid)
+//                .collection("grados")
+//                .document(gradoOrigen.id)
+
+//            gradoDestino
+//                .set(datosGrado)
+//                .await()
+
+//            val tecnicasOrigen = gradoOrigen.reference
+//                .collection("tecnicas")
+//                .get(Source.SERVER)
+//                .await()
+
+//            for (tecnicaOrigen in tecnicasOrigen.documents) {
+//                val datosTecnica = tecnicaOrigen.data ?: continue
+
+//                gradoDestino
+//                    .collection("tecnicas")
+//                    .document(tecnicaOrigen.id)
+//                    .set(datosTecnica)
+//                    .await()
+//            }
+//        }
+//
+//            Result.success(Unit)
+//        } catch (e: Exception) {
+//            Result.failure(e)
+//        }
+//    }
+
+
+    suspend fun shareGradosAndTecnicasToUser(
         fromUid: String,
         toUid: String
-    ): Result<Unit> {
+    ): Result<Int> {
         return try {
             if (fromUid.isBlank() || toUid.isBlank()) {
                 return Result.failure(
@@ -208,7 +268,7 @@ class FirestoreRepository(
             if (fromUid == toUid) {
                 return Result.failure(
                     IllegalArgumentException(
-                        "No puedes copiar tus datos a tu propia cuenta"
+                        "No puedes compartir tus datos contigo misma"
                     )
                 )
             }
@@ -219,17 +279,60 @@ class FirestoreRepository(
                 .get(Source.SERVER)
                 .await()
 
-            for (gradoOrigen in gradosOrigen.documents) {
-                val datosGrado = gradoOrigen.data ?: continue
+            val gradosDestino = db.collection("users")
+                .document(toUid)
+                .collection("grados")
+                .get(Source.SERVER)
+                .await()
 
-                val gradoDestino = db.collection("users")
+            /*
+             * Nombres de grados que ya existen en la cuenta destino.
+             * Se comparan en minúsculas para evitar duplicados por
+             * mayúsculas o espacios.
+             */
+            val nombresGradosDestino = gradosDestino.documents
+                .mapNotNull { doc ->
+                    doc.getString("nombre")
+                        ?.trim()
+                        ?.lowercase()
+                }
+                .toMutableSet()
+
+            var gradosCopiados = 0
+
+            for (gradoOrigen in gradosOrigen.documents) {
+                val nombreOriginal = gradoOrigen.getString("nombre")
+                    ?.trim()
+                    .orEmpty()
+
+                if (nombreOriginal.isBlank()) {
+                    continue
+                }
+
+                val nombreCopia = "Copia_$nombreOriginal"
+                val claveCopia = nombreCopia.lowercase()
+
+                /*
+                 * Si ya se compartió antes, no se vuelve a crear
+                 * ni se duplican técnicas.
+                 */
+                if (claveCopia in nombresGradosDestino) {
+                    continue
+                }
+
+                val nuevoGradoRef = db.collection("users")
                     .document(toUid)
                     .collection("grados")
-                    .document(gradoOrigen.id)
-
-                gradoDestino
-                    .set(datosGrado)
+                    .add(
+                        mapOf(
+                            "nombre" to nombreCopia,
+                            "numero" to (gradoOrigen.getLong("numero") ?: 0L)
+                        )
+                    )
                     .await()
+
+                nombresGradosDestino.add(claveCopia)
+                gradosCopiados++
 
                 val tecnicasOrigen = gradoOrigen.reference
                     .collection("tecnicas")
@@ -239,20 +342,20 @@ class FirestoreRepository(
                 for (tecnicaOrigen in tecnicasOrigen.documents) {
                     val datosTecnica = tecnicaOrigen.data ?: continue
 
-                    gradoDestino
+                    datosTecnica.remove("id")
+
+                    nuevoGradoRef
                         .collection("tecnicas")
-                        .document(tecnicaOrigen.id)
-                        .set(datosTecnica)
+                        .add(datosTecnica)
                         .await()
                 }
             }
 
-            Result.success(Unit)
+            Result.success(gradosCopiados)
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
-
     private suspend fun deleteGradosAndTecnicasOfUser(
         uid: String
     ): Result<Unit> {
@@ -294,42 +397,44 @@ class FirestoreRepository(
         }
     }
 
-    suspend fun overwriteGradosAndTecnicasToUser(
-        fromUid: String,
-        toUid: String
-    ): Result<Unit> {
-        return try {
-            if (fromUid.isBlank() || toUid.isBlank()) {
-                return Result.failure(
-                    IllegalArgumentException("UID origen o destino vacío")
-                )
-            }
+//  suspend fun overwriteGradosAndTecnicasToUser(
+//      fromUid: String,
+//      toUid: String
+//  ): Result<Unit> {
+//      return try {
+//          if (fromUid.isBlank() || toUid.isBlank()) {
+//              return Result.failure(
+//                  IllegalArgumentException("UID origen o destino vacío")
+//              )
+//          }
 
-            if (fromUid == toUid) {
-                return Result.failure(
-                    IllegalArgumentException(
-                        "No puedes sobrescribir tus propios datos"
-                    )
-                )
-            }
+//          if (fromUid == toUid) {
+//              return Result.failure(
+//                  IllegalArgumentException(
+//                      "No puedes sobrescribir tus propios datos"
+//                  )
+//              )
+//          }
 
-            val deleteResult = deleteGradosAndTecnicasOfUser(toUid)
+//          val deleteResult = deleteGradosAndTecnicasOfUser(toUid)
 
-            if (deleteResult.isFailure) {
-                return Result.failure(
-                    deleteResult.exceptionOrNull()
-                        ?: IllegalStateException("No se pudieron borrar los datos previos")
-                )
-            }
+//          if (deleteResult.isFailure) {
+//              return Result.failure(
+//                  deleteResult.exceptionOrNull()
+//                      ?: IllegalStateException("No se pudieron borrar los datos previos")
+//              )
+//          }
 
-            copyGradosAndTecnicasToUser(
-                fromUid = fromUid,
-                toUid = toUid
-            )
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
+//          copyGradosAndTecnicasToUser(
+//              fromUid = fromUid,
+//              toUid = toUid
+//          )
+//      } catch (e: Exception) {
+//          Result.failure(e)
+//      }
+//  }
+
+
 
     // ---------------- CLONAR TÉCNICAS DE UN COMPAÑERO ----------------
 

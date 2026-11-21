@@ -248,6 +248,67 @@ class GradosViewModel(
     // COMPARTIR / SOBRESCRIBIR
     // -------------------------------------------------------
 
+    fun shareGradosAndTecnicasToFriend(friend: Friend) {
+        viewModelScope.launch {
+            shareDataState = shareDataState.copy(
+                isLoading = true,
+                error = null,
+                shareSuccessMessage = null,
+                friendToOverwrite = null
+            )
+
+            val miUid = repo.currentUserUid()
+
+            if (miUid.isBlank()) {
+                shareDataState = shareDataState.copy(
+                    isLoading = false,
+                    error = "No hay usuario autenticado"
+                )
+                return@launch
+            }
+
+            if (friend.uidAmigo.isBlank()) {
+                shareDataState = shareDataState.copy(
+                    isLoading = false,
+                    error = "El UID del compañero no es válido"
+                )
+                return@launch
+            }
+
+            if (miUid == friend.uidAmigo) {
+                shareDataState = shareDataState.copy(
+                    isLoading = false,
+                    error = "No puedes compartir datos contigo misma"
+                )
+                return@launch
+            }
+
+            val result = repo.shareGradosAndTecnicasToUser(
+                fromUid = miUid,
+                toUid = friend.uidAmigo
+            )
+
+            shareDataState = if (result.isSuccess) {
+                val gradosCopiados = result.getOrNull() ?: 0
+
+                shareDataState.copy(
+                    isLoading = false,
+                    shareSuccessMessage = if (gradosCopiados == 0) {
+                        "Ya se habían compartido tus grados con ${friend.nombre}"
+                    } else {
+                        "Se han compartido $gradosCopiados grados con ${friend.nombre}"
+                    }
+                )
+            } else {
+                shareDataState.copy(
+                    isLoading = false,
+                    error = result.exceptionOrNull()?.localizedMessage
+                        ?: "No se han podido compartir los datos"
+                )
+            }
+        }
+    }
+/*
     fun prepareShareDataToFriend(friend: Friend) {
         viewModelScope.launch {
             shareDataState = ShareDataUiState(isLoading = true)
@@ -348,7 +409,7 @@ class GradosViewModel(
                     ?: "No se han podido enviar los datos"
             )
         }
-    }
+    }*/
 
     // -------------------------------------------------------
     // CLONAR TÉCNICAS DE UN COMPAÑERO

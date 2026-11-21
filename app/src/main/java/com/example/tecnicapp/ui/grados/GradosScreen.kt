@@ -57,12 +57,12 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.tecnicapp.data.Friend
 import com.example.tecnicapp.model.Grado
 import com.example.tecnicapp.ui.auth.AuthViewModel
 import kotlinx.coroutines.launch
-import androidx.compose.ui.unit.sp
 
 enum class GradosSortOrder {
     ASC,
@@ -622,8 +622,9 @@ fun GradosScreen(
             if (showShareDialog) {
                 ShareOrCloneDialog(
                     title = "Compartir mis técnicas con un compañero",
-                    description = "Selecciona un amigo existente o introduce el ID de un compañero " +
-                            "para enviarle tus grados y técnicas.",
+                    description = "Selecciona un amigo existente o introduce el UID de un compañero. " +
+                            "Se crearán grados nuevos llamados Copia_[nombre del grado] en su cuenta. " +
+                            "Sus grados y técnicas actuales no se borrarán.",
                     friends = friendsState.friends,
                     isLoading = friendsState.isLoading,
                     onDismiss = {
@@ -631,11 +632,11 @@ fun GradosScreen(
                     },
                     onFriendSelected = { friend ->
                         showShareDialog = false
-                        vm.prepareShareDataToFriend(friend)
+                        vm.shareGradosAndTecnicasToFriend(friend)
                     },
                     onUidSelected = { uid ->
                         showShareDialog = false
-                        vm.prepareShareDataToFriend(
+                        vm.shareGradosAndTecnicasToFriend(
                             Friend(
                                 id = uid,
                                 uidAmigo = uid,
@@ -653,7 +654,7 @@ fun GradosScreen(
             if (showCloneDialog) {
                 ShareOrCloneDialog(
                     title = "Clonar técnicas de un compañero",
-                    description = "Selecciona un amigo existente o introduce el ID de un compañero. " +
+                    description = "Selecciona un amigo existente o introduce el UID de un compañero. " +
                             "Solo se añadirán las técnicas que todavía no tengas con el mismo nombre. " +
                             "Tus técnicas actuales no se borrarán.",
                     friends = friendsState.friends,
@@ -672,45 +673,6 @@ fun GradosScreen(
                     onAddFriendClick = {
                         showCloneDialog = false
                         showAddFriendDialog = true
-                    }
-                )
-            }
-
-            val friendToOverwrite = shareDataState.friendToOverwrite
-
-            if (friendToOverwrite != null) {
-                AlertDialog(
-                    onDismissRequest = {
-                        vm.cancelOverwriteData()
-                    },
-                    title = {
-                        Text("Datos existentes")
-                    },
-                    text = {
-                        Text(
-                            "Al compartir tus técnicas con ${friendToOverwrite.nombre}, " +
-                                    "se añadirán a su cuenta. " +
-                                    "Si ya tiene técnicas con el mismo nombre, puedes elegir " +
-                                    "sobrescribirlas con las tuyas o cancelar."
-                        )
-                    },
-                    confirmButton = {
-                        TextButton(
-                            onClick = {
-                                vm.confirmOverwriteData(friendToOverwrite)
-                            }
-                        ) {
-                            Text("Sí, sobrescribir")
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(
-                            onClick = {
-                                vm.cancelOverwriteData()
-                            }
-                        ) {
-                            Text("No")
-                        }
                     }
                 )
             }
@@ -917,7 +879,7 @@ private fun ShareOrCloneDialog(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "O introduce un ID nuevo",
+                    text = "O introduce un UID nuevo",
                     style = MaterialTheme.typography.titleSmall
                 )
 
@@ -929,7 +891,7 @@ private fun ShareOrCloneDialog(
                         uidText = it
                     },
                     label = {
-                        Text("ID del compañero")
+                        Text("UID del compañero")
                     },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -944,7 +906,7 @@ private fun ShareOrCloneDialog(
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Continuar con este ID")
+                    Text("Continuar con este UID")
                 }
             }
         },
@@ -986,7 +948,7 @@ private fun AddFriendDialog(
                         uidText = it
                     },
                     label = {
-                        Text("ID del amigo")
+                        Text("UID del amigo")
                     },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
