@@ -16,12 +16,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -52,6 +51,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -62,6 +62,7 @@ import com.example.tecnicapp.data.Friend
 import com.example.tecnicapp.model.Grado
 import com.example.tecnicapp.ui.auth.AuthViewModel
 import kotlinx.coroutines.launch
+import androidx.compose.ui.unit.sp
 
 enum class GradosSortOrder {
     ASC,
@@ -78,12 +79,14 @@ fun GradosScreen(
     onLoggedOut: () -> Unit
 ) {
     val state by vm.uiState.collectAsState()
+
     LaunchedEffect(state.grados, state.isLoading) {
         android.util.Log.d(
             "TECNIAPP_GRADOS_SCREEN",
             "Pantalla: loading=${state.isLoading}, grados=${state.grados.size}"
         )
     }
+
     val friendsState = vm.friendsState
     val shareDataState = vm.shareDataState
     val changePassState = authVm.changePassState
@@ -106,24 +109,13 @@ fun GradosScreen(
 
     var showFriendsDialog by remember { mutableStateOf(false) }
     var showAddFriendDialog by remember { mutableStateOf(false) }
-    var showListFriendsDialog by remember { mutableStateOf(false) }
 
-    var selectedFriend by remember { mutableStateOf<Friend?>(null) }
+    var showShareDialog by remember { mutableStateOf(false) }
+    var showCloneDialog by remember { mutableStateOf(false) }
+
     var friendToDelete by remember { mutableStateOf<Friend?>(null) }
     var showDeleteFriendDialog by remember { mutableStateOf(false) }
-/*
-    val gradosOrdenados = remember(state.grados, sortOrder) {
-        when (sortOrder) {
-            GradosSortOrder.ASC -> {
-                state.grados.sortedBy { it.nombre.lowercase() }
-            }
 
-            GradosSortOrder.DESC -> {
-                state.grados.sortedByDescending { it.nombre.lowercase() }
-            }
-        }
-    }
-*/
     val gradosOrdenados = when (sortOrder) {
         GradosSortOrder.ASC -> {
             state.grados.sortedBy { it.nombre.lowercase() }
@@ -134,11 +126,6 @@ fun GradosScreen(
         }
     }
 
-
-    /*
-     * Un único efecto para mensajes de compartir:
-     * éxito o error. El SnackbarHost está dentro del Scaffold.
-     */
     LaunchedEffect(
         shareDataState.error,
         shareDataState.shareSuccessMessage
@@ -152,9 +139,6 @@ fun GradosScreen(
         }
     }
 
-    /*
-     * Mensajes propios de cargar/crear/editar/eliminar grados.
-     */
     LaunchedEffect(state.error) {
         val error = state.error
 
@@ -258,22 +242,45 @@ fun GradosScreen(
 
                             DropdownMenuItem(
                                 text = {
+                                    Text("Amigos")
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    vm.loadFriends()
+                                    showFriendsDialog = true
+                                }
+                            )
+
+                            DropdownMenuItem(
+                                text = {
+                                    Text("Compartir mis técnicas con un compañero")
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    vm.loadFriends()
+                                    showShareDialog = true
+                                }
+                            )
+
+                            DropdownMenuItem(
+                                text = {
+                                    Text("Clonar técnicas de un compañero")
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    vm.loadFriends()
+                                    showCloneDialog = true
+                                }
+                            )
+
+                            DropdownMenuItem(
+                                text = {
                                     Text("Cambiar contraseña")
                                 },
                                 onClick = {
                                     menuExpanded = false
                                     authVm.clearChangePasswordState()
                                     showChangePassDialog = true
-                                }
-                            )
-
-                            DropdownMenuItem(
-                                text = {
-                                    Text("Compartir mis técnicas")
-                                },
-                                onClick = {
-                                    menuExpanded = false
-                                    showFriendsDialog = true
                                 }
                             )
 
@@ -411,7 +418,7 @@ fun GradosScreen(
                                             Icon(
                                                 imageVector = Icons.Default.Delete,
                                                 contentDescription = "Eliminar grado",
-                                                tint = MaterialTheme.colorScheme.error
+                                                tint = Color.Black
                                             )
                                         }
                                     }
@@ -422,9 +429,6 @@ fun GradosScreen(
                 }
             }
 
-            /*
-             * Capa de carga al compartir/sobrescribir.
-             */
             if (shareDataState.isLoading) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -434,9 +438,6 @@ fun GradosScreen(
                 }
             }
 
-            /*
-             * Crear / editar grado.
-             */
             if (showGradoDialog) {
                 AlertDialog(
                     onDismissRequest = {
@@ -486,9 +487,6 @@ fun GradosScreen(
                 )
             }
 
-            /*
-             * Eliminar grado.
-             */
             if (showDeleteGradoDialog && gradoToDelete != null) {
                 AlertDialog(
                     onDismissRequest = {
@@ -514,7 +512,7 @@ fun GradosScreen(
                         ) {
                             Text(
                                 text = "Eliminar grado",
-                                color = MaterialTheme.colorScheme.error
+                                color = Color.Red
                             )
                         }
                     },
@@ -531,9 +529,6 @@ fun GradosScreen(
                 )
             }
 
-            /*
-             * Cambiar contraseña.
-             */
             if (showChangePassDialog) {
                 ChangePasswordDialog(
                     state = changePassState,
@@ -547,41 +542,140 @@ fun GradosScreen(
                 )
             }
 
-            /*
-             * Menú / diálogos de amigos.
-             */
-            FriendsDialogs(
-                vm = vm,
-                friendsState = friendsState,
-                showFriendsDialog = showFriendsDialog,
-                onShowFriendsDialogChange = {
-                    showFriendsDialog = it
-                },
-                showAddFriendDialog = showAddFriendDialog,
-                onShowAddFriendDialogChange = {
-                    showAddFriendDialog = it
-                },
-                showListFriendsDialog = showListFriendsDialog,
-                onShowListFriendsDialogChange = {
-                    showListFriendsDialog = it
-                },
-                selectedFriend = selectedFriend,
-                onSelectedFriendChange = {
-                    selectedFriend = it
-                },
-                showDeleteFriendDialog = showDeleteFriendDialog,
-                onShowDeleteFriendDialogChange = {
-                    showDeleteFriendDialog = it
-                },
-                friendToDelete = friendToDelete,
-                onFriendToDeleteChange = {
-                    friendToDelete = it
-                }
-            )
+            if (showFriendsDialog) {
+                FriendsDialog(
+                    friendsState = friendsState,
+                    onDismiss = {
+                        showFriendsDialog = false
+                    },
+                    onAddFriendClick = {
+                        showFriendsDialog = false
+                        showAddFriendDialog = true
+                    },
+                    onDeleteFriendClick = { friend ->
+                        friendToDelete = friend
+                        showDeleteFriendDialog = true
+                    }
+                )
+            }
 
-            /*
-             * Amigo ya tiene datos: pedir confirmación.
-             */
+            if (showAddFriendDialog) {
+                AddFriendDialog(
+                    friendsState = friendsState,
+                    onDismiss = {
+                        showAddFriendDialog = false
+                    },
+                    onAddFriend = { uid, nombre ->
+                        vm.addFriend(
+                            uidAmigo = uid,
+                            nombre = nombre
+                        )
+                    }
+                )
+            }
+
+            val currentFriendToDelete = friendToDelete
+
+            if (showDeleteFriendDialog && currentFriendToDelete != null) {
+                AlertDialog(
+                    onDismissRequest = {
+                        showDeleteFriendDialog = false
+                        friendToDelete = null
+                    },
+                    title = {
+                        Text("Eliminar amigo")
+                    },
+                    text = {
+                        Text(
+                            "¿Quieres eliminar a ${currentFriendToDelete.nombre} de tu lista de amigos? " +
+                                    "Esto no borrará sus grados ni sus técnicas."
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                vm.deleteFriend(currentFriendToDelete)
+
+                                showDeleteFriendDialog = false
+                                friendToDelete = null
+                            }
+                        ) {
+                            Text(
+                                text = "Eliminar",
+                                color = Color.Black
+                            )
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = {
+                                showDeleteFriendDialog = false
+                                friendToDelete = null
+                            }
+                        ) {
+                            Text("Cancelar")
+                        }
+                    }
+                )
+            }
+
+            if (showShareDialog) {
+                ShareOrCloneDialog(
+                    title = "Compartir mis técnicas con un compañero",
+                    description = "Selecciona un amigo existente o introduce el ID de un compañero " +
+                            "para enviarle tus grados y técnicas.",
+                    friends = friendsState.friends,
+                    isLoading = friendsState.isLoading,
+                    onDismiss = {
+                        showShareDialog = false
+                    },
+                    onFriendSelected = { friend ->
+                        showShareDialog = false
+                        vm.prepareShareDataToFriend(friend)
+                    },
+                    onUidSelected = { uid ->
+                        showShareDialog = false
+                        vm.prepareShareDataToFriend(
+                            Friend(
+                                id = uid,
+                                uidAmigo = uid,
+                                nombre = "Compañero"
+                            )
+                        )
+                    },
+                    onAddFriendClick = {
+                        showShareDialog = false
+                        showAddFriendDialog = true
+                    }
+                )
+            }
+
+            if (showCloneDialog) {
+                ShareOrCloneDialog(
+                    title = "Clonar técnicas de un compañero",
+                    description = "Selecciona un amigo existente o introduce el ID de un compañero. " +
+                            "Solo se añadirán las técnicas que todavía no tengas con el mismo nombre. " +
+                            "Tus técnicas actuales no se borrarán.",
+                    friends = friendsState.friends,
+                    isLoading = friendsState.isLoading,
+                    onDismiss = {
+                        showCloneDialog = false
+                    },
+                    onFriendSelected = { friend ->
+                        showCloneDialog = false
+                        vm.cloneTechniquesFromFriend(friend.uidAmigo)
+                    },
+                    onUidSelected = { uid ->
+                        showCloneDialog = false
+                        vm.cloneTechniquesFromFriend(uid)
+                    },
+                    onAddFriendClick = {
+                        showCloneDialog = false
+                        showAddFriendDialog = true
+                    }
+                )
+            }
+
             val friendToOverwrite = shareDataState.friendToOverwrite
 
             if (friendToOverwrite != null) {
@@ -594,8 +688,10 @@ fun GradosScreen(
                     },
                     text = {
                         Text(
-                            "${friendToOverwrite.nombre} ya tiene grados o técnicas guardadas. " +
-                                    "¿Quieres borrar sus datos actuales y sobrescribirlos con los tuyos?"
+                            "Al compartir tus técnicas con ${friendToOverwrite.nombre}, " +
+                                    "se añadirán a su cuenta. " +
+                                    "Si ya tiene técnicas con el mismo nombre, puedes elegir " +
+                                    "sobrescribirlas con las tuyas o cancelar."
                         )
                     },
                     confirmButton = {
@@ -620,6 +716,330 @@ fun GradosScreen(
             }
         }
     }
+}
+
+@Composable
+private fun FriendsDialog(
+    friendsState: FriendsUiState,
+    onDismiss: () -> Unit,
+    onAddFriendClick: () -> Unit,
+    onDeleteFriendClick: (Friend) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text("Amigos")
+        },
+        text = {
+            Column {
+                Button(
+                    onClick = onAddFriendClick,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = null
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Text("Añadir amigo")
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                when {
+                    friendsState.isLoading -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(80.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    }
+
+                    friendsState.friends.isEmpty() -> {
+                        Text(
+                            text = "Todavía no tienes amigos añadidos",
+                            color = Color.Gray
+                        )
+                    }
+
+                    else -> {
+                        friendsState.friends.forEach { friend ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = friend.nombre,
+                                    modifier = Modifier.weight(1f)
+                                )
+
+                                IconButton(
+                                    onClick = {
+                                        onDeleteFriendClick(friend)
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Eliminar amigo",
+                                        tint = Color.Black
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                friendsState.error?.let { error ->
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = error,
+                        color = Color.Black
+                    )
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss
+            ) {
+                Text("Cerrar")
+            }
+        }
+    )
+}
+
+@Composable
+private fun ShareOrCloneDialog(
+    title: String,
+    description: String,
+    friends: List<Friend>,
+    isLoading: Boolean,
+    onDismiss: () -> Unit,
+    onFriendSelected: (Friend) -> Unit,
+    onUidSelected: (String) -> Unit,
+    onAddFriendClick: () -> Unit
+) {
+    var uidText by remember {
+        mutableStateOf("")
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(title)
+        },
+        text = {
+            Column {
+                Text(
+                    text = description,
+                    fontSize = 14.sp
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Button(
+                    onClick = onAddFriendClick,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = null
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Text("Añadir amigo nuevo")
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "Selecciona un amigo existente",
+                    style = MaterialTheme.typography.titleSmall
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                when {
+                    isLoading -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(80.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    }
+
+                    friends.isEmpty() -> {
+                        Text(
+                            text = "Todavía no tienes amigos añadidos",
+                            color = Color.Gray,
+                            fontSize = 14.sp
+                        )
+                    }
+
+                    else -> {
+                        friends.forEach { friend ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        onFriendSelected(friend)
+                                    }
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = friend.nombre,
+                                    modifier = Modifier.weight(1f)
+                                )
+
+                                Icon(
+                                    imageVector = Icons.Default.ArrowForward,
+                                    contentDescription = "Seleccionar amigo"
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "O introduce un ID nuevo",
+                    style = MaterialTheme.typography.titleSmall
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = uidText,
+                    onValueChange = {
+                        uidText = it
+                    },
+                    label = {
+                        Text("ID del compañero")
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Button(
+                    enabled = uidText.trim().isNotBlank(),
+                    onClick = {
+                        onUidSelected(uidText.trim())
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Continuar con este ID")
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss
+            ) {
+                Text("Cancelar")
+            }
+        }
+    )
+}
+
+@Composable
+private fun AddFriendDialog(
+    friendsState: FriendsUiState,
+    onDismiss: () -> Unit,
+    onAddFriend: (String, String) -> Unit
+) {
+    var uidText by remember {
+        mutableStateOf("")
+    }
+
+    var nombreText by remember {
+        mutableStateOf("")
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text("Añadir amigo")
+        },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = uidText,
+                    onValueChange = {
+                        uidText = it
+                    },
+                    label = {
+                        Text("ID del amigo")
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = nombreText,
+                    onValueChange = {
+                        nombreText = it
+                    },
+                    label = {
+                        Text("Nombre del amigo")
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                friendsState.error?.let { error ->
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = error,
+                        color = Color.Black
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = uidText.trim().isNotBlank() &&
+                        nombreText.trim().isNotBlank(),
+                onClick = {
+                    onAddFriend(
+                        uidText.trim(),
+                        nombreText.trim()
+                    )
+
+                    onDismiss()
+                }
+            ) {
+                Text("Guardar")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss
+            ) {
+                Text("Cancelar")
+            }
+        }
+    )
 }
 
 @Composable
@@ -704,7 +1124,7 @@ private fun ChangePasswordDialog(
 
                     Text(
                         text = error,
-                        color = MaterialTheme.colorScheme.error
+                        color = Color.Black
                     )
                 }
 
@@ -783,296 +1203,6 @@ private fun PasswordField(
             }
         }
     )
-}
-
-@Composable
-private fun FriendsDialogs(
-    vm: GradosViewModel,
-    friendsState: FriendsUiState,
-    showFriendsDialog: Boolean,
-    onShowFriendsDialogChange: (Boolean) -> Unit,
-    showAddFriendDialog: Boolean,
-    onShowAddFriendDialogChange: (Boolean) -> Unit,
-    showListFriendsDialog: Boolean,
-    onShowListFriendsDialogChange: (Boolean) -> Unit,
-    selectedFriend: Friend?,
-    onSelectedFriendChange: (Friend?) -> Unit,
-    showDeleteFriendDialog: Boolean,
-    onShowDeleteFriendDialogChange: (Boolean) -> Unit,
-    friendToDelete: Friend?,
-    onFriendToDeleteChange: (Friend?) -> Unit
-) {
-    if (showFriendsDialog) {
-        AlertDialog(
-            onDismissRequest = {
-                onShowFriendsDialogChange(false)
-            },
-            title = {
-                Text("Amigos")
-            },
-            text = {
-                Column {
-                    Button(
-                        onClick = {
-                            onShowFriendsDialogChange(false)
-                            onShowAddFriendDialogChange(true)
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Añadir amigo")
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Button(
-                        onClick = {
-                            onShowFriendsDialogChange(false)
-                            onSelectedFriendChange(null)
-                            vm.loadFriends()
-                            onShowListFriendsDialogChange(true)
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Ver amigos")
-                    }
-                }
-            },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        onShowFriendsDialogChange(false)
-                    }
-                ) {
-                    Text("Cerrar")
-                }
-            }
-        )
-    }
-
-    if (showAddFriendDialog) {
-        var uidText by remember {
-            mutableStateOf("")
-        }
-
-        var nombreText by remember {
-            mutableStateOf("")
-        }
-
-        AlertDialog(
-            onDismissRequest = {
-                onShowAddFriendDialogChange(false)
-            },
-            title = {
-                Text("Añadir amigo")
-            },
-            text = {
-                Column {
-                    OutlinedTextField(
-                        value = uidText,
-                        onValueChange = {
-                            uidText = it
-                        },
-                        label = {
-                            Text("UID del amigo")
-                        },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        value = nombreText,
-                        onValueChange = {
-                            nombreText = it
-                        },
-                        label = {
-                            Text("Nombre del amigo")
-                        },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    friendsState.error?.let { error ->
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Text(
-                            text = error,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = uidText.trim().isNotBlank() &&
-                            nombreText.trim().isNotBlank(),
-                    onClick = {
-                        vm.addFriend(
-                            uidAmigo = uidText.trim(),
-                            nombre = nombreText.trim()
-                        )
-
-                        onShowAddFriendDialogChange(false)
-                    }
-                ) {
-                    Text("Guardar")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        onShowAddFriendDialogChange(false)
-                    }
-                ) {
-                    Text("Cancelar")
-                }
-            }
-        )
-    }
-
-    if (showListFriendsDialog) {
-        AlertDialog(
-            onDismissRequest = {
-                onShowListFriendsDialogChange(false)
-                onSelectedFriendChange(null)
-            },
-            title = {
-                Text("Tus amigos")
-            },
-            text = {
-                Column {
-                    when {
-                        friendsState.isLoading -> {
-                            Box(
-                                modifier = Modifier.fillMaxWidth(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator()
-                            }
-                        }
-
-                        friendsState.friends.isEmpty() -> {
-                            Text("Todavía no tienes amigos añadidos")
-                        }
-
-                        else -> {
-                            friendsState.friends.forEach { friend ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            onSelectedFriendChange(friend)
-                                        }
-                                        .padding(vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = friend.nombre,
-                                        modifier = Modifier.weight(1f)
-                                    )
-
-                                    if (selectedFriend?.id == friend.id) {
-                                        IconButton(
-                                            onClick = {
-                                                vm.prepareShareDataToFriend(friend)
-                                            }
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.ArrowForward,
-                                                contentDescription = "Compartir mis técnicas"
-                                            )
-                                        }
-                                    }
-
-                                    IconButton(
-                                        onClick = {
-                                            onFriendToDeleteChange(friend)
-                                            onShowDeleteFriendDialogChange(true)
-                                        }
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Delete,
-                                            contentDescription = "Eliminar amigo",
-                                            tint = MaterialTheme.colorScheme.error
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    friendsState.error?.let { error ->
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Text(
-                            text = error,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-                }
-            },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        onShowListFriendsDialogChange(false)
-                        onSelectedFriendChange(null)
-                    }
-                ) {
-                    Text("Cerrar")
-                }
-            }
-        )
-    }
-
-    if (showDeleteFriendDialog && friendToDelete != null) {
-        AlertDialog(
-            onDismissRequest = {
-                onShowDeleteFriendDialogChange(false)
-                onFriendToDeleteChange(null)
-            },
-            title = {
-                Text("Eliminar amigo")
-            },
-            text = {
-                Text(
-                    "¿Quieres eliminar a ${friendToDelete.nombre} de tu lista de amigos? " +
-                            "Esto no borrará sus grados ni sus técnicas."
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        vm.deleteFriend(friendToDelete)
-
-                        if (selectedFriend?.id == friendToDelete.id) {
-                            onSelectedFriendChange(null)
-                        }
-
-                        onShowDeleteFriendDialogChange(false)
-                        onFriendToDeleteChange(null)
-                    }
-                ) {
-                    Text(
-                        text = "Eliminar",
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        onShowDeleteFriendDialogChange(false)
-                        onFriendToDeleteChange(null)
-                    }
-                ) {
-                    Text("Cancelar")
-                }
-            }
-        )
-    }
 }
 
 @Composable

@@ -3,8 +3,8 @@ package com.example.tecnicapp.data
 import com.example.tecnicapp.model.Grado
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.tasks.await
 import com.google.firebase.firestore.Source
+import kotlinx.coroutines.tasks.await
 
 class FirestoreRepository(
     private val db: FirebaseFirestore = FirebaseFirestore.getInstance(),
@@ -12,10 +12,7 @@ class FirestoreRepository(
 ) {
 
     fun currentUserUid(): String {
-        val uid = auth.currentUser?.uid.orEmpty()
-        // Opcional para debug:
-        // android.util.Log.d("FirestoreRepository", "currentUserUid = $uid")
-        return uid
+        return auth.currentUser?.uid.orEmpty()
     }
 
     // ---------------- GRADOS ----------------
@@ -67,31 +64,41 @@ class FirestoreRepository(
     suspend fun addGrado(nombre: String): Result<Unit> {
         return try {
             val uid = currentUserUid()
+
             if (uid.isBlank()) {
-                // No hay usuario: no escribas nada y devuelve error/controlado
-                return Result.failure(IllegalStateException("No hay usuario autenticado"))
+                return Result.failure(
+                    IllegalStateException("No hay usuario autenticado")
+                )
             }
 
             val data = mapOf(
                 "nombre" to nombre,
-                "numero" to 0
+                "numero" to 0L
             )
-                db.collection("users")
+
+            db.collection("users")
                 .document(uid)
                 .collection("grados")
                 .add(data)
                 .await()
+
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
-    suspend fun updateGrado(gradoId: String, nuevoNombre: String): Result<Unit> {
+    suspend fun updateGrado(
+        gradoId: String,
+        nuevoNombre: String
+    ): Result<Unit> {
         return try {
             val uid = currentUserUid()
+
             if (uid.isBlank()) {
-                return Result.failure(IllegalStateException("No hay usuario autenticado"))
+                return Result.failure(
+                    IllegalStateException("No hay usuario autenticado")
+                )
             }
 
             db.collection("users")
@@ -100,6 +107,7 @@ class FirestoreRepository(
                 .document(gradoId)
                 .update("nombre", nuevoNombre)
                 .await()
+
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -126,13 +134,11 @@ class FirestoreRepository(
                 "Borrando grado completo: uid=$uid, gradoId=$gradoId"
             )
 
-            // 1. Leer todas las técnicas que contiene el grado.
             val tecnicasSnapshot = gradoRef
                 .collection("tecnicas")
                 .get(Source.SERVER)
                 .await()
 
-            // 2. Eliminar uno por uno los documentos de técnicas.
             for (tecnicaDoc in tecnicasSnapshot.documents) {
                 android.util.Log.d(
                     "TECNIAPP_DELETE_GRADO",
@@ -144,7 +150,6 @@ class FirestoreRepository(
                     .await()
             }
 
-            // 3. Cuando ya no existen técnicas, eliminar el documento del grado.
             gradoRef
                 .delete()
                 .await()
@@ -167,7 +172,6 @@ class FirestoreRepository(
     }
 
     // ---------------- COPIAR GRADOS Y TÉCNICAS A OTRO UID ----------------
-
 
     suspend fun userHasGrados(uid: String): Result<Boolean> {
         return try {
@@ -201,6 +205,14 @@ class FirestoreRepository(
                 )
             }
 
+            if (fromUid == toUid) {
+                return Result.failure(
+                    IllegalArgumentException(
+                        "No puedes copiar tus datos a tu propia cuenta"
+                    )
+                )
+            }
+
             val gradosOrigen = db.collection("users")
                 .document(fromUid)
                 .collection("grados")
@@ -210,10 +222,6 @@ class FirestoreRepository(
             for (gradoOrigen in gradosOrigen.documents) {
                 val datosGrado = gradoOrigen.data ?: continue
 
-                /*
-                 * Conservamos el ID del grado origen.
-                 * Con set() evitamos crear un documento nuevo aleatorio.
-                 */
                 val gradoDestino = db.collection("users")
                     .document(toUid)
                     .collection("grados")
@@ -231,10 +239,6 @@ class FirestoreRepository(
                 for (tecnicaOrigen in tecnicasOrigen.documents) {
                     val datosTecnica = tecnicaOrigen.data ?: continue
 
-                    /*
-                     * Conservamos también el ID de técnica.
-                     * No usar add(), porque crea duplicados.
-                     */
                     gradoDestino
                         .collection("tecnicas")
                         .document(tecnicaOrigen.id)
@@ -273,18 +277,12 @@ class FirestoreRepository(
                     .get(Source.SERVER)
                     .await()
 
-                /*
-                 * Primero borrar documentos de técnicas.
-                 */
                 for (tecnicaDoc in tecnicasSnapshot.documents) {
                     tecnicaDoc.reference
                         .delete()
                         .await()
                 }
 
-                /*
-                 * Después borrar el documento del grado.
-                 */
                 gradoDoc.reference
                     .delete()
                     .await()
@@ -333,4 +331,172 @@ class FirestoreRepository(
         }
     }
 
+    // ---------------- CLONAR TÉCNICAS DE UN COMPAÑERO ----------------
+
+    suspend fun cloneTechniquesFromFriend(uidAmigo: String): Result<Int> {
+        return try {
+            val miUid = currentUserUid()
+
+            if (miUid.isBlank()) {
+                return Result.failure(
+                    IllegalStateException("No hay usuario autenticado")
+                )
+            }
+
+            if (uidAmigo.isBlank()) {
+                return Result.failure(
+                    IllegalArgumentException("El UID del compañero está vacío")
+                )
+            }
+
+            if (uidAmigo == miUid) {
+                return Result.failure(
+                    IllegalArgumentException(
+                        "No puedes clonar técnicas de tu propia cuenta"
+                    )
+                )
+            }
+
+            android.util.Log.d(
+                "TECNIAPP_CLONE",
+                "Clonando desde uidAmigo=$uidAmigo hacia miUid=$miUid"
+            )
+
+            val gradosAmigo = db.collection("users")
+                .document(uidAmigo)
+                .collection("grados")
+                .get(Source.SERVER)
+                .await()
+
+            val misGradosSnapshot = db.collection("users")
+                .document(miUid)
+                .collection("grados")
+                .get(Source.SERVER)
+                .await()
+
+            val misGradosPorNombre = misGradosSnapshot.documents
+                .mapNotNull { doc ->
+                    val nombre = doc.getString("nombre")
+                        ?.trim()
+                        ?.lowercase()
+                        .orEmpty()
+
+                    if (nombre.isBlank()) {
+                        null
+                    } else {
+                        nombre to doc.id
+                    }
+                }
+                .toMap()
+                .toMutableMap()
+
+            var tecnicasClonadas = 0
+
+            for (gradoAmigoDoc in gradosAmigo.documents) {
+                val nombreGrado = gradoAmigoDoc.getString("nombre")
+                    ?.trim()
+                    .orEmpty()
+
+                if (nombreGrado.isBlank()) {
+                    continue
+                }
+
+                val claveGrado = nombreGrado.lowercase()
+
+                val miGradoIdExistente = misGradosPorNombre[claveGrado]
+
+                val miGradoId: String
+
+                if (miGradoIdExistente != null) {
+                    miGradoId = miGradoIdExistente
+                } else {
+                    val nuevoGradoRef = db.collection("users")
+                        .document(miUid)
+                        .collection("grados")
+                        .add(
+                            mapOf(
+                                "nombre" to nombreGrado,
+                                "numero" to (gradoAmigoDoc.getLong("numero") ?: 0L)
+                            )
+                        )
+                        .await()
+
+                    miGradoId = nuevoGradoRef.id
+
+                    misGradosPorNombre[claveGrado] = miGradoId
+                }
+
+                val tecnicasAmigo = db.collection("users")
+                    .document(uidAmigo)
+                    .collection("grados")
+                    .document(gradoAmigoDoc.id)
+                    .collection("tecnicas")
+                    .get(Source.SERVER)
+                    .await()
+
+                val misTecnicas = db.collection("users")
+                    .document(miUid)
+                    .collection("grados")
+                    .document(miGradoId)
+                    .collection("tecnicas")
+                    .get(Source.SERVER)
+                    .await()
+
+                val nombresExistentes = misTecnicas.documents
+                    .mapNotNull { tecnicaDoc ->
+                        tecnicaDoc.getString("nombre")
+                            ?.trim()
+                            ?.lowercase()
+                    }
+                    .toMutableSet()
+
+                for (tecnicaAmigoDoc in tecnicasAmigo.documents) {
+                    val nombreTecnica = tecnicaAmigoDoc.getString("nombre")
+                        ?.trim()
+                        .orEmpty()
+
+                    if (nombreTecnica.isBlank()) {
+                        continue
+                    }
+
+                    val claveTecnica = nombreTecnica.lowercase()
+
+                    if (claveTecnica in nombresExistentes) {
+                        continue
+                    }
+
+                    val datosTecnica = tecnicaAmigoDoc.data.orEmpty()
+                        .toMutableMap()
+
+                    datosTecnica.remove("id")
+
+                    db.collection("users")
+                        .document(miUid)
+                        .collection("grados")
+                        .document(miGradoId)
+                        .collection("tecnicas")
+                        .add(datosTecnica)
+                        .await()
+
+                    nombresExistentes.add(claveTecnica)
+                    tecnicasClonadas++
+                }
+            }
+
+            android.util.Log.d(
+                "TECNIAPP_CLONE",
+                "Técnicas clonadas: $tecnicasClonadas"
+            )
+
+            Result.success(tecnicasClonadas)
+        } catch (e: Exception) {
+            android.util.Log.e(
+                "TECNIAPP_CLONE",
+                "Error clonando técnicas",
+                e
+            )
+
+            Result.failure(e)
+        }
+    }
 }

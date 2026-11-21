@@ -265,10 +265,6 @@ class GradosViewModel(
             val friendHasData = result.getOrDefault(false)
 
             if (friendHasData) {
-                /*
-                 * No copiamos todavía. Dejamos a la UI mostrar el diálogo
-                 * de confirmación de sobrescritura.
-                 */
                 shareDataState = ShareDataUiState(
                     friendToOverwrite = friend
                 )
@@ -354,11 +350,44 @@ class GradosViewModel(
         }
     }
 
-    /*
-     * Solo borra mensajes. No borres todo ShareDataUiState aquí,
-     * porque podría desaparecer friendToOverwrite antes de que
-     * el diálogo use esa información.
-     */
+    // -------------------------------------------------------
+    // CLONAR TÉCNICAS DE UN COMPAÑERO
+    // -------------------------------------------------------
+
+    fun cloneTechniquesFromFriend(uidAmigo: String) {
+        viewModelScope.launch {
+            shareDataState = shareDataState.copy(
+                isLoading = true,
+                error = null,
+                shareSuccessMessage = null,
+                friendToOverwrite = null
+            )
+
+            val result = repo.cloneTechniquesFromFriend(uidAmigo)
+
+            shareDataState = if (result.isSuccess) {
+                val total = result.getOrNull() ?: 0
+
+                shareDataState.copy(
+                    isLoading = false,
+                    shareSuccessMessage = if (total == 0) {
+                        "No había técnicas nuevas que clonar"
+                    } else {
+                        "Se han clonado $total técnicas nuevas"
+                    }
+                )
+            } else {
+                shareDataState.copy(
+                    isLoading = false,
+                    error = result.exceptionOrNull()?.localizedMessage
+                        ?: "No se pudieron clonar las técnicas"
+                )
+            }
+
+            loadGrados()
+        }
+    }
+
     fun clearShareMessage() {
         shareDataState = shareDataState.copy(
             error = null,

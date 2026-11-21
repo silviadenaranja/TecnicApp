@@ -113,11 +113,13 @@ fun LoginScreen(
                 ) {
                     Button(onClick = { vm.login() }) {
                         Text("Iniciar sesión",
-                        color=MaterialTheme.colorScheme.tertiary)
+                        color=Color.White)
+                           // MaterialTheme.colorScheme.secondary)
                     }
-                    TextButton(onClick = { vm.register() }) {
+                    Button(onClick = { vm.register() }) {
                         Text("Registrarse",
-                        color=MaterialTheme.colorScheme.tertiary)
+                        color=Color.White)
+                            //MaterialTheme.colorScheme.tertiary)
                     }
                 }
 
