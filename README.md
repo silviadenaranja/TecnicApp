@@ -25,6 +25,6 @@ Extras
 - Puedes restaurar tu contraseña si la olvidaste 
 - Puedes copiar tu ID de usuario para que otro compañero pueda añadirte.
 
-La aplicación incluye un pequeño easter egg: si pulsas cinco veces sobre “Mis grados”, aparecerá una imagen especial a pantalla completa.
+La aplicación incluye un pequeño easter egg
 
 En resumen, TecnicApp te ayuda a llevar un registro claro de tu progreso, guardar tus técnicas y aprender de tus compañeros de forma segura y organizada.
