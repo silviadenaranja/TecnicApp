@@ -10,6 +10,7 @@ import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import com.example.tecnicapp.util.mensajeErrorEnEspanol
 
 data class AuthUiState(
     val email: String = "",
@@ -110,8 +111,8 @@ class AuthViewModel(
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isLoggedIn = false,
-                    error = result.exceptionOrNull()?.localizedMessage
-                        ?: "Error al iniciar sesión"
+                    error = "Email incorrecto o inexistente"//result.exceptionOrNull()?.localizedMessage
+                        //?: "Error al iniciar sesión"
                 )
             }
 
@@ -145,8 +146,8 @@ class AuthViewModel(
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isLoggedIn = false,
-                    error = result.exceptionOrNull()?.localizedMessage
-                        ?: "Error al registrarse"
+                    error = mensajeErrorEnEspanol(result.exceptionOrNull())
+                       // ?: "Error al registrarse"
                 )
             }
 
@@ -175,8 +176,9 @@ class AuthViewModel(
                 ForgotPasswordUiState(success = true)
             } else {
                 ForgotPasswordUiState(
-                    error = result.exceptionOrNull()?.localizedMessage
-                        ?: "Error enviando el correo"
+                    error = mensajeErrorEnEspanol(result.exceptionOrNull())
+                        /*result.exceptionOrNull()?.localizedMessage
+                        ?: "Error enviando el correo"*/
                 )
             }
         }
@@ -209,8 +211,9 @@ class AuthViewModel(
                 ChangePasswordUiState(success = true)
             } else {
                 ChangePasswordUiState(
-                    error = result.exceptionOrNull()?.localizedMessage
-                        ?: "Error cambiando contraseña"
+                    error = mensajeErrorEnEspanol(result.exceptionOrNull())
+                        /*result.exceptionOrNull()?.localizedMessage
+                        ?: "Error cambiando contraseña"*/
                 )
             }
         }
