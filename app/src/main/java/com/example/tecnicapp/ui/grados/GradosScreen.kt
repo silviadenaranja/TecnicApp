@@ -56,6 +56,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -68,6 +69,12 @@ import com.example.tecnicapp.data.FriendsUiState
 import com.example.tecnicapp.model.Grado
 import com.example.tecnicapp.ui.auth.AuthViewModel
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.example.tecnicapp.R
+import androidx.compose.material.icons.filled.Close
 
 data class TecnicaSeleccionable(
     val gradoId: String = "",
@@ -137,6 +144,9 @@ fun GradosScreen(
     var showDeleteFriendDialog by remember { mutableStateOf(false) }
 
     var showSolicitudesDialog by remember { mutableStateOf(false) }
+
+    var showEasterEggDialog by remember { mutableStateOf(false) }
+    var tituloTaps by remember { mutableStateOf(0) }
 
     val gradosOrdenados = when (sortOrder) {
         GradosSortOrder.ASC -> {
@@ -225,7 +235,19 @@ fun GradosScreen(
         },
         topBar = {
             TopAppBar(
-                title = { Text("Mis grados") },
+                title = {
+                    Text(
+                        text = "Mis grados",
+                        modifier = Modifier.clickable {
+                            tituloTaps++
+
+                            if (tituloTaps >= 5) {
+                                tituloTaps = 0
+                                showEasterEggDialog = true
+                            }
+                        }
+                    )
+                },
                 navigationIcon = {
                     Box {
                         IconButton(
@@ -507,7 +529,7 @@ fun GradosScreen(
                                             Icon(
                                                 imageVector = Icons.Default.Delete,
                                                 contentDescription = "Eliminar grado",
-                                                tint = Color.Black
+                                              //  tint = Color.Red
                                             )
                                         }
                                     }
@@ -540,6 +562,14 @@ fun GradosScreen(
                     },
                     onRechazar = { solicitudId ->
                         vm.rechazarSolicitud(solicitudId)
+                    }
+                )
+            }
+            if (showEasterEggDialog) {
+                EasterEggDialog(
+                    onDismiss = {
+                        showEasterEggDialog = false
+                        tituloTaps = 0
                     }
                 )
             }
@@ -618,7 +648,7 @@ fun GradosScreen(
                         ) {
                             Text(
                                 text = "Eliminar grado",
-                                color = Color.Red
+                                //color = Color.Red
                             )
                         }
                     },
@@ -759,7 +789,7 @@ fun GradosScreen(
                         ) {
                             Text(
                                 text = "Eliminar",
-                                color = Color.Black
+                                //color = Color.Black
                             )
                         }
                     },
@@ -958,7 +988,7 @@ private fun FriendsDialog(
                                         Icon(
                                             imageVector = Icons.Default.Delete,
                                             contentDescription = "Eliminar amigo",
-                                            tint = Color.Black
+                                          //  tint = Color.Black
                                         )
                                     }
                                 }
@@ -1742,4 +1772,41 @@ private fun SolicitudesDialog(
             }
         }
     )
+}
+@Composable
+private fun EasterEggDialog(
+    onDismiss: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.easter_egg),
+                contentDescription = "Easter egg",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize()
+            )
+
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(16.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Cerrar",
+                    tint = Color.Gray
+                )
+            }
+        }
+    }
 }
